@@ -2,8 +2,12 @@ import SwiftUI
 
 struct HomeView: View {
     @ObservedObject var viewModel: RollViewModel
+    var onContinueRoll: (() -> Void)?
+    var onStartRoll: ((RollMode, Bool) async -> Void)?
+    var onOpenRoll: ((Roll) -> Void)?
     @State private var selectedMode: RollMode = .freeform
     @State private var showsAbout = false
+    @State private var showsStartOverConfirmation = false
 
     var body: some View {
         let _ = print("[Nine] HomeView body rendered · activeRoll exists: \(viewModel.activeRoll != nil) · resumeState exists: \(viewModel.resumeState != nil)")
@@ -14,9 +18,9 @@ struct HomeView: View {
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 22) {
                     NineBrandMark()
-                        .frame(width: 120, height: 120)
-                        .padding(.top, 62)
-                        .padding(.bottom, 4)
+                        .frame(width: 144, height: 144)
+                        .padding(.top, 68)
+                        .padding(.bottom, 12)
                         .contentShape(Rectangle())
                         .onTapGesture {
                             showsAbout = true
@@ -24,9 +28,11 @@ struct HomeView: View {
                         .accessibilityAddTraits(.isButton)
                         .accessibilityLabel("About Nine")
 
-                    modeSelection
+                    createSection
 
-                    primaryActions
+                    if viewModel.hasInProgressRoll {
+                        resumeSection
+                    }
 
                     if !viewModel.storedRolls.isEmpty {
                         archiveList
@@ -50,20 +56,64 @@ struct HomeView: View {
             print("[Nine] HomeView appeared")
         }
         .sheet(isPresented: $showsAbout) {
-            NineAboutView()
+            NineInfoNoteView(
+                text: "Nine is a double-exposure camera.\n\nShoot nine frames, then re-load the roll and shoot nine more.\n\nEnjoy the unexpected."
+            )
                 .presentationDetents([.medium])
                 .presentationDragIndicator(.visible)
         }
+        .alert("Start New Roll?", isPresented: $showsStartOverConfirmation) {
+            Button("Cancel", role: .cancel) { }
+            Button("Start Over", role: .destructive) {
+                Task {
+                    await onStartRoll?(selectedMode, true)
+                }
+            }
+        } message: {
+            Text("Your current roll is not complete.\n\nStarting a new roll will discard it.")
+        }
     }
 
-    private var primaryActions: some View {
+    private var createSection: some View {
+        VStack(spacing: 14) {
+            modeSelection
+            startNewRollButton
+        }
+    }
+
+    private var resumeSection: some View {
         VStack(spacing: 12) {
             Button {
-                Task { await viewModel.startRoll(mode: selectedMode) }
+                onContinueRoll?()
+            } label: {
+                Text("Continue Roll")
+                    .font(AfterimageType.primaryAction)
+                .foregroundStyle(.white.opacity(0.84))
+                .frame(maxWidth: .infinity, minHeight: 48)
+                .background(.white.opacity(0.075), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .stroke(.white.opacity(0.13), lineWidth: 1)
+                }
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private var startNewRollButton: some View {
+        VStack(spacing: 12) {
+            Button {
+                if viewModel.hasInProgressRoll {
+                    showsStartOverConfirmation = true
+                } else {
+                    Task {
+                        await onStartRoll?(selectedMode, false)
+                    }
+                }
             } label: {
                 Text("Start New Roll")
                     .font(AfterimageType.primaryAction)
-                    .foregroundStyle(.black)
+                    .foregroundStyle(.black.opacity(0.92))
                     .frame(maxWidth: .infinity, minHeight: 46)
                     .background(.white.opacity(0.92), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
             }
@@ -72,11 +122,11 @@ struct HomeView: View {
     }
 
     private var modeSelection: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .center, spacing: 10) {
             LazyVGrid(
-                columns: Array(repeating: GridItem(.flexible(), spacing: 14, alignment: .leading), count: 2),
-                alignment: .leading,
-                spacing: 14
+                columns: Array(repeating: GridItem(.fixed(118), spacing: 18, alignment: .center), count: 2),
+                alignment: .center,
+                spacing: 16
             ) {
                 ForEach(RollMode.allCases) { mode in
                     Button {
@@ -91,6 +141,7 @@ struct HomeView: View {
                 }
             }
         }
+        .frame(maxWidth: .infinity, alignment: .center)
     }
 
     private var archiveList: some View {
@@ -104,7 +155,11 @@ struct HomeView: View {
                 ForEach(viewModel.storedRolls) { roll in
                     ArchiveRollRow(roll: roll)
                     .onTapGesture {
-                        viewModel.open(roll)
+                        if let onOpenRoll {
+                            onOpenRoll(roll)
+                        } else {
+                            viewModel.open(roll)
+                        }
                     }
                     .listRowInsets(EdgeInsets(top: 5, leading: 0, bottom: 5, trailing: 0))
                     .listRowSeparator(.hidden)
@@ -127,28 +182,12 @@ struct HomeView: View {
     }
 }
 
-private struct NineAboutView: View {
-    var body: some View {
-        ZStack {
-            Color.black.ignoresSafeArea()
-
-            Text("Nine is a double-exposure camera.\n\nShoot nine frames, then re-load the roll and shoot nine more.\n\nEnjoy the unexpected.")
-                .font(AfterimageType.body)
-                .multilineTextAlignment(.center)
-                .foregroundStyle(.white.opacity(0.72))
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: 300)
-            .padding(.horizontal, 28)
-        }
-    }
-}
-
 private struct ModeRadioRow: View {
     let title: String
     let isSelected: Bool
 
     var body: some View {
-        HStack(spacing: 12) {
+        VStack(spacing: 7) {
             ZStack {
                 Circle()
                     .stroke(.white.opacity(isSelected ? 0.9 : 0.36), lineWidth: 1.4)
@@ -165,12 +204,12 @@ private struct ModeRadioRow: View {
             Text(title)
                 .font(AfterimageType.body)
                 .foregroundStyle(.white.opacity(isSelected ? 0.96 : 0.72))
+                .multilineTextAlignment(.center)
                 .lineLimit(1)
                 .minimumScaleFactor(0.82)
-
-            Spacer(minLength: 0)
         }
-        .frame(maxWidth: .infinity, minHeight: 34, alignment: .leading)
+        .frame(width: 118, alignment: .center)
+        .frame(minHeight: 48, alignment: .center)
         .contentShape(Rectangle())
     }
 }

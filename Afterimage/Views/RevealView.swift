@@ -2,6 +2,7 @@ import SwiftUI
 
 struct RevealView: View {
     @ObservedObject var viewModel: RollViewModel
+    var onReturnHome: (() -> Void)?
     @AppStorage("afterimage.shareAttributionEnabled") private var shareAttributionEnabled = true
     @State private var visibleFrameCount = 0
     @State private var pageIndex = 0
@@ -13,24 +14,44 @@ struct RevealView: View {
     }
 
     var body: some View {
-        ZStack {
-            Color.black.ignoresSafeArea()
+        GeometryReader { geometry in
+            let imageStage = AfterimageLayout.imageStage(in: geometry)
+            let underImageControlY = imageStage.bottom + 24
+            let swipeHeight = max(52, min(72, geometry.size.height - imageStage.bottom - geometry.safeAreaInsets.bottom - 110))
+            let swipeY = imageStage.bottom + 72 + swipeHeight / 2
 
-            VStack(spacing: 20) {
-                revealHeader
-                rollPager
-                navigationIndicator
-                persistentActions
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, AfterimageLayout.margin)
-            .padding(.top, AfterimageLayout.headerTopSpacing)
-            .padding(.bottom, 22)
+            ZStack {
+                Color.black.ignoresSafeArea()
 
-            if let message = viewModel.statusMessage {
-                toast(message)
-                    .transition(AfterimageMotion.toastTransition)
-                    .zIndex(3)
+                VStack(spacing: 0) {
+                    revealHeader
+                        .padding(.top, geometry.safeAreaInsets.top + AfterimageLayout.headerTopSpacing)
+                        .padding(.horizontal, AfterimageLayout.margin)
+
+                    Spacer()
+                }
+
+                rollPager(side: imageStage.side)
+                    .frame(width: imageStage.side, height: imageStage.side)
+                    .position(x: imageStage.centerX, y: imageStage.centerY)
+
+                underImageControlRow(width: imageStage.side)
+                    .position(x: imageStage.centerX, y: underImageControlY)
+                    .zIndex(2)
+
+                belowImageSwipeZone(width: imageStage.side, height: swipeHeight)
+                    .position(x: imageStage.centerX, y: swipeY)
+                    .zIndex(2)
+
+                edgeSwipeZone(height: geometry.size.height)
+                    .position(x: 12, y: geometry.size.height / 2)
+                    .zIndex(2)
+
+                if let message = viewModel.statusMessage {
+                    toast(message)
+                        .transition(AfterimageMotion.toastTransition)
+                        .zIndex(3)
+                }
             }
         }
         .sheet(item: $shareItem) { item in
@@ -51,46 +72,40 @@ struct RevealView: View {
     }
 
     private var revealHeader: some View {
-        HStack(alignment: .top) {
-            AfterimageBackButton(action: viewModel.returnHome)
-
-            Spacer()
-            VStack(spacing: 7) {
-                if let roll = viewModel.activeRoll {
-                    EditableRollTitleView(
-                        title: roll.title,
-                        style: .reveal,
-                        alignment: .center
-                    ) { title in
-                        viewModel.renameRoll(id: roll.id, to: title)
-                    }
+        VStack(spacing: 7) {
+            if let roll = viewModel.activeRoll {
+                EditableRollTitleView(
+                    title: roll.title,
+                    style: .reveal,
+                    alignment: .center
+                ) { title in
+                    viewModel.renameRoll(id: roll.id, to: title)
                 }
-                Text(viewModel.activeRoll?.mode.title ?? "")
-                    .font(AfterimageType.metadata)
-                    .tracking(1.2)
-                    .foregroundStyle(.white.opacity(0.42))
             }
-            Spacer()
-            Color.clear.frame(width: AfterimageLayout.backControlSize, height: AfterimageLayout.backControlSize)
+            Text(viewModel.activeRoll?.mode.title ?? "")
+                .font(AfterimageType.metadata)
+                .tracking(1.2)
+                .foregroundStyle(.white.opacity(0.42))
         }
+        .frame(maxWidth: .infinity)
         .foregroundStyle(.white.opacity(0.92))
     }
 
-    private var rollPager: some View {
+    private func rollPager(side: CGFloat) -> some View {
         TabView(selection: $pageIndex) {
             contactSheet
                 .padding(.horizontal, 2)
+                .frame(width: side, height: side)
                 .tag(0)
 
             ForEach(Array(images.enumerated()), id: \.offset) { index, image in
                 ZoomableImage(image: image)
                     .padding(.horizontal, 4)
+                    .frame(width: side, height: side)
                     .tag(index + 1)
             }
         }
         .tabViewStyle(.page(indexDisplayMode: .never))
-        .frame(maxWidth: .infinity)
-        .aspectRatio(1, contentMode: .fit)
     }
 
     private var contactSheet: some View {
@@ -128,7 +143,7 @@ struct RevealView: View {
             Text("›")
                 .opacity(pageIndex < images.count ? 1 : 0)
         }
-        .font(.system(size: 17, weight: .medium, design: .serif))
+        .font(AfterimageType.caption)
         .foregroundStyle(.white.opacity(0.52))
         .frame(height: 18)
         .allowsHitTesting(false)
@@ -136,11 +151,71 @@ struct RevealView: View {
         .animation(AfterimageMotion.quick, value: pageIndex)
     }
 
-    private var persistentActions: some View {
-        AfterimagePrimaryButton(title: isPreparingShare ? "Preparing" : "Share", isDisabled: viewModel.isExporting || isPreparingShare || images.isEmpty) {
-            prepareCurrentShare()
+    private func underImageControlRow(width: CGFloat) -> some View {
+        HStack(alignment: .center, spacing: 10) {
+            Color.clear
+                .frame(width: 44, height: 38)
+
+            Spacer(minLength: 10)
+
+            navigationIndicator
+                .frame(maxWidth: width - 116, alignment: .center)
+
+            Spacer(minLength: 10)
+
+            shareIconButton
+                .frame(width: 44, alignment: .trailing)
         }
-        .padding(.top, 2)
+        .frame(width: width, height: 40)
+    }
+
+    private var shareIconButton: some View {
+        Button {
+            prepareCurrentShare()
+        } label: {
+            Image(systemName: "square.and.arrow.up")
+                .font(.system(size: 18.5, weight: .medium))
+                .foregroundStyle(.white.opacity(viewModel.isExporting || isPreparingShare || images.isEmpty ? 0.16 : 0.36))
+                .frame(width: 38, height: 38)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(AfterimagePressButtonStyle())
+        .disabled(viewModel.isExporting || isPreparingShare || images.isEmpty)
+        .accessibilityLabel(isPreparingShare ? "Preparing share" : "Share")
+    }
+
+    private func belowImageSwipeZone(width: CGFloat, height: CGFloat) -> some View {
+        Color.clear
+            .frame(width: width, height: height)
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 24)
+                    .onEnded { value in
+                        guard isIntentionalHomeSwipe(value.translation, minimumDistance: 72) else { return }
+                        onReturnHome?()
+                    }
+            )
+            .accessibilityLabel("Swipe right to return Home")
+    }
+
+    private func edgeSwipeZone(height: CGFloat) -> some View {
+        Color.clear
+            .frame(width: 24, height: height)
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 18)
+                    .onEnded { value in
+                        guard value.startLocation.x <= 24 else { return }
+                        guard isIntentionalHomeSwipe(value.translation, minimumDistance: 84) else { return }
+                        onReturnHome?()
+                    }
+            )
+            .accessibilityLabel("Swipe from left edge to return Home")
+    }
+
+    private func isIntentionalHomeSwipe(_ translation: CGSize, minimumDistance: CGFloat) -> Bool {
+        guard translation.width > minimumDistance else { return false }
+        return abs(translation.width) > abs(translation.height) * 1.55
     }
 
     private func toast(_ message: String) -> some View {

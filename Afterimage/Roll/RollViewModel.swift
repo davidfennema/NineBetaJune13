@@ -67,8 +67,27 @@ final class RollViewModel: ObservableObject {
         }
     }
 
+    var hasInProgressRoll: Bool {
+        activeRoll?.requiresCaptureInput == true
+            || resumableRoll?.requiresCaptureInput == true
+            || resumeState != nil
+    }
+
+    func parkActiveRollForLibrary() {
+        guard let activeRoll, activeRoll.requiresCaptureInput else { return }
+        resumableRoll = activeRoll
+        resumeState = RollResumeState(roll: activeRoll)
+        self.activeRoll = nil
+        statusMessage = nil
+        enqueuePersistence(for: activeRoll)
+    }
+
     func continueRoll() {
         print("[Nine] continue roll requested · hydrated: \(resumableRoll != nil) · cached resume: \(resumeState != nil)")
+        if activeRoll?.requiresCaptureInput == true {
+            statusMessage = nil
+            return
+        }
         guard let roll = resumableRoll else {
             if let resumeState {
                 Task { await hydrateAndContinueRoll(id: resumeState.id) }
@@ -141,7 +160,10 @@ final class RollViewModel: ObservableObject {
 
     func discardResumableAndStart(mode: RollMode) async {
         do {
-            if let roll = resumableRoll {
+            if let roll = activeRoll, roll.requiresCaptureInput {
+                try await store.discard(roll)
+                activeRoll = nil
+            } else if let roll = resumableRoll {
                 try await store.discard(roll)
             } else if let id = resumeState?.id {
                 try await store.discardRoll(id: id)
@@ -232,13 +254,13 @@ final class RollViewModel: ObservableObject {
         statusMessage = nil
     }
 
-    func recordCapture(_ image: UIImage) async throws -> CaptureMilestone {
+    func recordCapture(_ image: UIImage, metadata: [String: String]? = nil) async throws -> CaptureMilestone {
         guard var roll = activeRoll else { throw RollError.captureUnavailable }
         guard let data = await encodedJPEGData(from: image) else {
             throw RollError.imageEncodingFailed
         }
 
-        let frame = CapturedFrame(imageData: data)
+        let frame = CapturedFrame(imageData: data, metadata: metadata)
         let milestone = try roll.append(frame)
         activeRoll = roll
         resumeState = roll.requiresCaptureInput ? RollResumeState(roll: roll) : nil

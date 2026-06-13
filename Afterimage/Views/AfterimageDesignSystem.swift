@@ -4,6 +4,8 @@ enum AfterimageLayout {
     static let margin: CGFloat = 24
     static let rowSpacing: CGFloat = 24
     static let headerTopSpacing: CGFloat = 32
+    static let imageStageTopOffset: CGFloat = 112
+    static let imageStageHeightRatio: CGFloat = 0.54
     static let backControlSize: CGFloat = 34
     static let backIconSize: CGFloat = 14
     static let actionHeight: CGFloat = 46
@@ -17,20 +19,52 @@ enum AfterimageLayout {
     static func listRowInsets(top: CGFloat, bottom: CGFloat) -> EdgeInsets {
         EdgeInsets(top: top, leading: margin, bottom: bottom, trailing: margin)
     }
+
+    static func imageStage(in geometry: GeometryProxy) -> AfterimageImageStage {
+        let side = min(
+            geometry.size.width - (margin * 2),
+            geometry.size.height * imageStageHeightRatio
+        )
+        let top = geometry.safeAreaInsets.top + imageStageTopOffset
+        return AfterimageImageStage(
+            side: side,
+            top: top,
+            centerX: geometry.size.width / 2
+        )
+    }
+}
+
+struct AfterimageImageStage {
+    let side: CGFloat
+    let top: CGFloat
+    let centerX: CGFloat
+
+    var centerY: CGFloat {
+        top + side / 2
+    }
+
+    var bottom: CGFloat {
+        top + side
+    }
 }
 
 enum AfterimageType {
+    static func system(size: CGFloat, weight: Font.Weight = .regular) -> Font {
+        .system(size: size, weight: weight)
+    }
+
     static func mono(size: CGFloat, weight: Font.Weight = .regular) -> Font {
         .system(size: size, weight: weight, design: .monospaced)
     }
 
-    static let screenTitle = mono(size: 28, weight: .medium)
-    static let rollTitle = mono(size: 18, weight: .medium)
-    static let archiveTitle = mono(size: 15, weight: .medium)
-    static let primaryAction = mono(size: 15, weight: .semibold)
-    static let metadata = mono(size: 11, weight: .medium)
-    static let body = mono(size: 12, weight: .regular)
-    static let caption = mono(size: 10, weight: .medium)
+    static let screenTitle = system(size: 28, weight: .semibold)
+    static let rollTitle = system(size: 18, weight: .semibold)
+    static let archiveTitle = system(size: 15, weight: .semibold)
+    static let primaryAction = system(size: 15, weight: .semibold)
+    static let metadata = system(size: 11, weight: .medium)
+    static let body = system(size: 13, weight: .regular)
+    static let caption = system(size: 11, weight: .medium)
+    static let instrumentCaption = mono(size: 10, weight: .medium)
 }
 
 enum AfterimageMotion {
@@ -111,5 +145,24 @@ struct AfterimageMetadataLabel: View {
             .font(AfterimageType.metadata)
             .tracking(tracking)
             .foregroundStyle(.white.opacity(opacity))
+    }
+}
+
+struct NineInfoNoteView: View {
+    let text: String
+
+    var body: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+
+            Text(text)
+                .font(.system(size: 19, weight: .regular))
+                .lineSpacing(3)
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.white.opacity(0.76))
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: 320)
+                .padding(.horizontal, 28)
+        }
     }
 }

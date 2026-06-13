@@ -3,6 +3,7 @@ import UIKit
 
 struct CameraView: View {
     @ObservedObject var viewModel: RollViewModel
+    var onReturnHome: (() -> Void)?
     @StateObject private var camera = CameraManager()
     @Environment(\.scenePhase) private var scenePhase
 
@@ -20,6 +21,7 @@ struct CameraView: View {
     @State private var lastExposureHapticStep: Int?
     @State private var contextualHint: String?
     @State private var hintTask: Task<Void, Never>?
+    @State private var showsCameraHelp = false
     @AppStorage("afterimage.didShowFocusLockHint") private var didShowFocusLockHint = false
     @AppStorage("afterimage.didShowPinchHint") private var didShowPinchHint = false
 
@@ -37,7 +39,11 @@ struct CameraView: View {
 
     var body: some View {
         GeometryReader { geometry in
-            let squareSide = min(geometry.size.width - (AfterimageLayout.margin * 2), geometry.size.height * 0.54)
+            let imageStage = AfterimageLayout.imageStage(in: geometry)
+            let shutterY = geometry.size.height - max(geometry.safeAreaInsets.bottom, 22) - 38
+            let belowPreviewSwipeHeight = max(52, min(72, shutterY - imageStage.bottom - 96))
+            let underPreviewControlY = imageStage.bottom + 24
+            let belowPreviewSwipeY = imageStage.bottom + 72 + belowPreviewSwipeHeight / 2
 
             ZStack {
                 Color.black.ignoresSafeArea()
@@ -47,16 +53,32 @@ struct CameraView: View {
                         .padding(.top, geometry.safeAreaInsets.top + 14)
                         .padding(.horizontal, AfterimageLayout.margin)
 
-                    Spacer(minLength: 22)
-
-                    squarePreview(side: squareSide)
-
-                    Spacer(minLength: 20)
-
-                    shutter
-                        .padding(.top, 22)
-                        .padding(.bottom, max(geometry.safeAreaInsets.bottom, 22))
+                    Spacer()
                 }
+                .zIndex(3)
+
+                squarePreview(side: imageStage.side)
+                    .position(x: imageStage.centerX, y: imageStage.centerY)
+                    .zIndex(1)
+
+                shutter
+                    .position(
+                        x: geometry.size.width / 2,
+                        y: shutterY
+                    )
+                    .zIndex(2)
+
+                underPreviewControlRow(width: imageStage.side)
+                    .position(x: imageStage.centerX, y: underPreviewControlY)
+                    .zIndex(3)
+
+                belowPreviewSwipeZone(width: imageStage.side, height: belowPreviewSwipeHeight)
+                    .position(x: imageStage.centerX, y: belowPreviewSwipeY)
+                    .zIndex(3)
+
+                edgeSwipeZone(height: geometry.size.height)
+                    .position(x: 12, y: geometry.size.height / 2)
+                    .zIndex(3)
 
                 if camera.authorizationDenied {
                     permissionNotice
@@ -79,11 +101,18 @@ struct CameraView: View {
             }
         }
         .onDisappear { camera.stop() }
+        .sheet(isPresented: $showsCameraHelp) {
+            NineInfoNoteView(
+                text: "Pinch to zoom.\n\nSwipe to adjust exposure.\n\nLong-tap for AF lock."
+            )
+                .presentationDetents([.medium])
+                .presentationDragIndicator(.visible)
+        }
     }
 
     private func squarePreview(side: CGFloat) -> some View {
         ZStack {
-            PreviewView(session: camera.session)
+            PreviewView(session: camera.session, isMirrored: camera.isPreviewMirrored)
                 .frame(width: side, height: side)
                 .saturation(previewSaturation)
 
@@ -141,12 +170,7 @@ struct CameraView: View {
                         return
                     }
                     showFocusReticle(at: value.location)
-                    camera.focus(
-                        at: CGPoint(
-                            x: value.location.x / side,
-                            y: value.location.y / side
-                        )
-                    )
+                    camera.focus(at: normalizedCameraPoint(from: value.location, side: side))
                 }
         )
         .simultaneousGesture(exposureDragGesture(side: side))
@@ -178,7 +202,7 @@ struct CameraView: View {
                     )
 
                     Text(phaseCaption)
-                        .font(AfterimageType.caption)
+                        .font(AfterimageType.instrumentCaption)
                         .tracking(1.35)
                         .foregroundStyle(.white.opacity(0.38))
                 }
@@ -188,6 +212,99 @@ struct CameraView: View {
                 ProgressGrid(count: roll?.capturedFrameCount ?? 0)
             }
         }
+    }
+
+    private var cameraSwitchButton: some View {
+        Button {
+            print("[Nine] Camera switch tapped")
+            camera.switchCamera()
+        } label: {
+            Image(systemName: "camera.rotate")
+                .font(.system(size: 17, weight: .medium))
+                .foregroundStyle(.white.opacity(camera.canSwitchCamera ? 0.46 : 0.16))
+                .frame(width: 34, height: 34)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(AfterimagePressButtonStyle())
+        .disabled(isCapturing || showsBlackout || showsTransition)
+        .accessibilityLabel(camera.cameraPosition == .front ? "Switch to rear camera" : "Switch to front camera")
+    }
+
+    private var cameraHelpButton: some View {
+        Button {
+            showsCameraHelp = true
+        } label: {
+            Image(systemName: "info.circle")
+                .font(.system(size: 18.5, weight: .medium))
+                .foregroundStyle(.white.opacity(0.36))
+                .frame(width: 38, height: 38)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(AfterimagePressButtonStyle())
+        .disabled(showsTransition)
+        .accessibilityLabel("Camera help")
+    }
+
+    private func underPreviewControlRow(width: CGFloat) -> some View {
+        HStack(alignment: .center, spacing: 10) {
+            cameraSwitchButton
+                .frame(width: 44, alignment: .leading)
+
+            Spacer(minLength: 10)
+
+            rollStyleLabel
+                .frame(maxWidth: width - 116, alignment: .center)
+
+            Spacer(minLength: 10)
+
+            cameraHelpButton
+                .frame(width: 44, alignment: .trailing)
+        }
+        .frame(width: width, height: 40)
+    }
+
+    private var rollStyleLabel: some View {
+        Text(roll?.mode.title ?? "Freeform")
+            .font(AfterimageType.caption)
+            .tracking(0.45)
+            .foregroundStyle(.white.opacity(0.36))
+            .lineLimit(1)
+            .allowsHitTesting(false)
+    }
+
+    private func belowPreviewSwipeZone(width: CGFloat, height: CGFloat) -> some View {
+        Color.clear
+            .frame(width: width, height: height)
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 24)
+                    .onEnded { value in
+                        guard isIntentionalHomeSwipe(value.translation, minimumDistance: 72) else { return }
+                        onReturnHome?()
+                    }
+            )
+            .accessibilityLabel("Swipe right to return to Library")
+    }
+
+    private func edgeSwipeZone(height: CGFloat) -> some View {
+        Color.clear
+            .frame(width: 24, height: height)
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 18)
+                    .onEnded { value in
+                        guard value.startLocation.x <= 24 else { return }
+                        guard isIntentionalHomeSwipe(value.translation, minimumDistance: 84) else { return }
+                        onReturnHome?()
+                    }
+            )
+            .accessibilityLabel("Swipe from left edge to return to Library")
+    }
+
+    private func isIntentionalHomeSwipe(_ translation: CGSize, minimumDistance: CGFloat) -> Bool {
+        guard !showsTransition else { return false }
+        guard translation.width > minimumDistance else { return false }
+        return abs(translation.width) > abs(translation.height) * 1.55
     }
 
     private var shutter: some View {
@@ -284,9 +401,7 @@ struct CameraView: View {
                 isHoldingFocusLock = true
                 suppressNextTap = true
                 showLockedFeedback(at: point)
-                camera.beginHoldFocusLock(
-                    at: CGPoint(x: point.x / side, y: point.y / side)
-                )
+                camera.beginHoldFocusLock(at: normalizedCameraPoint(from: point, side: side))
                 if !didShowFocusLockHint {
                     didShowFocusLockHint = true
                     showContextualHint("AF LOCK\nDrag left or right to adjust exposure")
@@ -346,7 +461,10 @@ struct CameraView: View {
         Task {
             do {
                 let image = try await camera.capturePhoto()
-                let milestone = try await viewModel.recordCapture(image)
+                let milestone = try await viewModel.recordCapture(
+                    image,
+                    metadata: ["cameraPosition": camera.cameraPosition.rawValue]
+                )
                 camera.resetFocusLockAfterCapture()
 
                 if milestone == .firstPassComplete {
@@ -400,6 +518,15 @@ struct CameraView: View {
         try? await Task.sleep(for: .seconds(1.25))
         showsBlackout = false
         withAnimation(AfterimageMotion.longReveal) { showsTransition = false }
+    }
+
+    private func normalizedCameraPoint(from point: CGPoint, side: CGFloat) -> CGPoint {
+        let normalizedX = min(max(point.x / side, 0), 1)
+        let normalizedY = min(max(point.y / side, 0), 1)
+        return CGPoint(
+            x: camera.isPreviewMirrored ? 1 - normalizedX : normalizedX,
+            y: normalizedY
+        )
     }
 }
 

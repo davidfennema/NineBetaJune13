@@ -1,8 +1,29 @@
 import AVFoundation
 import UIKit
 
+enum NineCameraPosition: String, CaseIterable {
+    case back
+    case front
+
+    var avPosition: AVCaptureDevice.Position {
+        switch self {
+        case .back: return .back
+        case .front: return .front
+        }
+    }
+
+    var alternate: NineCameraPosition {
+        switch self {
+        case .back: return .front
+        case .front: return .back
+        }
+    }
+}
+
 @MainActor
 final class CameraManager: NSObject, ObservableObject {
+    private static let preferredCameraPositionKey = "nine.preferredCameraPosition"
+
     @Published private(set) var authorizationDenied = false
     @Published private(set) var isReady = false
     @Published var exposureBias: Float = 0
@@ -10,6 +31,12 @@ final class CameraManager: NSObject, ObservableObject {
     @Published private(set) var zoomFactor: CGFloat = 1
     @Published private(set) var isHoldFocusLocked = false
     @Published private(set) var isManualFocusActive = false
+    @Published private(set) var cameraPosition: NineCameraPosition
+    @Published private(set) var canSwitchCamera = false
+
+    var isPreviewMirrored: Bool {
+        cameraPosition == .front
+    }
 
     // AVFoundation session work is serialized on sessionQueue, outside UI isolation.
     nonisolated(unsafe) let session = AVCaptureSession()
@@ -17,11 +44,19 @@ final class CameraManager: NSObject, ObservableObject {
     nonisolated(unsafe) private let output = AVCapturePhotoOutput()
     private let sessionQueue = DispatchQueue(label: "com.nine.camera.session", qos: .userInitiated)
     nonisolated(unsafe) private var device: AVCaptureDevice?
+    nonisolated(unsafe) private var currentInput: AVCaptureDeviceInput?
     nonisolated(unsafe) private var isConfigured = false
     private var continuation: CheckedContinuation<UIImage, Error>?
     private var focusAcquisitionTask: Task<Void, Never>?
     private var focusRestoreTask: Task<Void, Never>?
     private var focusLockToken: UUID?
+
+    override init() {
+        let storedPosition = UserDefaults.standard.string(forKey: Self.preferredCameraPositionKey)
+            .flatMap(NineCameraPosition.init(rawValue:))
+        cameraPosition = storedPosition ?? .back
+        super.init()
+    }
 
     func start() async {
         guard await authorizeCamera() else {
@@ -58,7 +93,45 @@ final class CameraManager: NSObject, ObservableObject {
             let settings = AVCapturePhotoSettings()
             settings.photoQualityPrioritization = .speed
             settings.flashMode = .off
+            if let connection = output.connection(with: .video),
+               connection.isVideoMirroringSupported {
+                // Front preview is mirrored to feel natural while composing, but captures are
+                // saved unmirrored so first/second pass pairs and exports share one stable orientation.
+                connection.automaticallyAdjustsVideoMirroring = false
+                connection.isVideoMirrored = false
+            }
             output.capturePhoto(with: settings, delegate: self)
+        }
+    }
+
+    func switchCamera() {
+        print("[Nine] Camera switch requested · current: \(cameraPosition.rawValue)")
+        guard !isHoldFocusLocked, continuation == nil else { return }
+        let nextPosition = cameraPosition.alternate
+        guard camera(for: nextPosition) != nil else {
+            print("[Nine] Camera switch unavailable · missing: \(nextPosition.rawValue)")
+            return
+        }
+
+        isReady = false
+        cancelHoldFocusLock()
+        sessionQueue.async { [weak self] in
+            guard let self else { return }
+            do {
+                try self.configureInput(position: nextPosition)
+                Task { @MainActor in
+                    self.cameraPosition = nextPosition
+                    self.persistPreferredCameraPosition(nextPosition)
+                    self.resetPublishedCameraControls()
+                    self.isReady = true
+                    print("[Nine] Camera switched · current: \(nextPosition.rawValue)")
+                }
+            } catch {
+                Task { @MainActor in
+                    self.isReady = true
+                    print("[Nine] Camera switch failed · \(error.localizedDescription)")
+                }
+            }
         }
     }
 
@@ -190,6 +263,7 @@ final class CameraManager: NSObject, ObservableObject {
 
     private func configureIfNeeded() async throws {
         guard !isConfigured else { return }
+        let selectedPosition = camera(for: cameraPosition) != nil ? cameraPosition : .back
 
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             sessionQueue.async { [weak self] in
@@ -202,28 +276,35 @@ final class CameraManager: NSObject, ObservableObject {
                     self.session.sessionPreset = .photo
                     defer { self.session.commitConfiguration() }
 
-                    guard let camera = self.preferredBackCamera(),
-                          let input = try? AVCaptureDeviceInput(device: camera),
-                          self.session.canAddInput(input),
+                    guard self.camera(for: selectedPosition) != nil,
                           self.session.canAddOutput(self.output) else {
                         throw CameraError.configurationFailed
                     }
 
-                    self.configureAutomaticCloseFocusIfSupported(on: camera)
-                    self.session.addInput(input)
                     self.session.addOutput(self.output)
+                    try self.configureInput(position: selectedPosition, commitsSessionConfiguration: false)
                     self.output.maxPhotoQualityPrioritization = .speed
-                    if let connection = self.output.connection(with: .video),
-                       connection.isVideoRotationAngleSupported(90) {
-                        connection.videoRotationAngle = 90
-                    }
-                    self.device = camera
                     self.isConfigured = true
-                    continuation.resume(returning: ())
+                    let canSwitch = NineCameraPosition.allCases.allSatisfy { self.camera(for: $0) != nil }
+                    Task { @MainActor in
+                        self.canSwitchCamera = canSwitch
+                        self.cameraPosition = selectedPosition
+                        self.resetPublishedCameraControls()
+                        continuation.resume(returning: ())
+                    }
                 } catch {
                     continuation.resume(throwing: error)
                 }
             }
+        }
+    }
+
+    private nonisolated func camera(for position: NineCameraPosition) -> AVCaptureDevice? {
+        switch position {
+        case .back:
+            return preferredBackCamera()
+        case .front:
+            return preferredFrontCamera()
         }
     }
 
@@ -240,6 +321,63 @@ final class CameraManager: NSObject, ObservableObject {
         )
         return discovery.devices.first
             ?? AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back)
+    }
+
+    private nonisolated func preferredFrontCamera() -> AVCaptureDevice? {
+        let discovery = AVCaptureDevice.DiscoverySession(
+            deviceTypes: [
+                .builtInTrueDepthCamera,
+                .builtInWideAngleCamera
+            ],
+            mediaType: .video,
+            position: .front
+        )
+        return discovery.devices.first
+            ?? AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .front)
+    }
+
+    private nonisolated func configureInput(
+        position: NineCameraPosition,
+        commitsSessionConfiguration: Bool = true
+    ) throws {
+        guard let camera = camera(for: position),
+              let input = try? AVCaptureDeviceInput(device: camera) else {
+            throw CameraError.configurationFailed
+        }
+
+        if commitsSessionConfiguration {
+            session.beginConfiguration()
+        }
+        defer {
+            if commitsSessionConfiguration {
+                session.commitConfiguration()
+            }
+        }
+
+        let previousInput = currentInput
+        if let currentInput {
+            session.removeInput(currentInput)
+        }
+
+        guard session.canAddInput(input) else {
+            if let previousInput, session.canAddInput(previousInput) {
+                session.addInput(previousInput)
+            }
+            throw CameraError.configurationFailed
+        }
+
+        if position == .back {
+            configureAutomaticCloseFocusIfSupported(on: camera)
+        }
+
+        session.addInput(input)
+        currentInput = input
+        device = camera
+
+        if let connection = output.connection(with: .video),
+           connection.isVideoRotationAngleSupported(90) {
+            connection.videoRotationAngle = 90
+        }
     }
 
     private nonisolated func configureAutomaticCloseFocusIfSupported(on camera: AVCaptureDevice) {
@@ -295,6 +433,17 @@ final class CameraManager: NSObject, ObservableObject {
         focusRestoreTask = nil
         focusLockToken = nil
         isHoldFocusLocked = false
+    }
+
+    private func persistPreferredCameraPosition(_ position: NineCameraPosition) {
+        UserDefaults.standard.set(position.rawValue, forKey: Self.preferredCameraPositionKey)
+    }
+
+    private func resetPublishedCameraControls() {
+        exposureBias = 0
+        manualLensPosition = device?.lensPosition ?? 0.5
+        zoomFactor = device?.videoZoomFactor ?? 1
+        isManualFocusActive = false
     }
 }
 
