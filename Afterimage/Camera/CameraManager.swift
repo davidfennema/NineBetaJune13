@@ -1,0 +1,368 @@
+import AVFoundation
+import UIKit
+
+@MainActor
+final class CameraManager: NSObject, ObservableObject {
+    @Published private(set) var authorizationDenied = false
+    @Published private(set) var isReady = false
+    @Published var exposureBias: Float = 0
+    @Published private(set) var manualLensPosition: Float = 0.5
+    @Published private(set) var zoomFactor: CGFloat = 1
+    @Published private(set) var isHoldFocusLocked = false
+    @Published private(set) var isManualFocusActive = false
+
+    // AVFoundation session work is serialized on sessionQueue, outside UI isolation.
+    nonisolated(unsafe) let session = AVCaptureSession()
+
+    nonisolated(unsafe) private let output = AVCapturePhotoOutput()
+    private let sessionQueue = DispatchQueue(label: "com.nine.camera.session", qos: .userInitiated)
+    nonisolated(unsafe) private var device: AVCaptureDevice?
+    nonisolated(unsafe) private var isConfigured = false
+    private var continuation: CheckedContinuation<UIImage, Error>?
+    private var focusAcquisitionTask: Task<Void, Never>?
+    private var focusRestoreTask: Task<Void, Never>?
+    private var focusLockToken: UUID?
+
+    func start() async {
+        guard await authorizeCamera() else {
+            authorizationDenied = true
+            return
+        }
+
+        do {
+            try await configureIfNeeded()
+            sessionQueue.async { [weak self] in
+                guard let self, !self.session.isRunning else { return }
+                self.session.startRunning()
+            }
+            isReady = true
+        } catch {
+            authorizationDenied = true
+        }
+    }
+
+    func stop() {
+        cancelHoldFocusLock()
+        sessionQueue.async { [weak self] in
+            guard let self, self.session.isRunning else { return }
+            self.session.stopRunning()
+        }
+        isReady = false
+    }
+
+    func capturePhoto() async throws -> UIImage {
+        guard isReady, continuation == nil else { throw CameraError.notReady }
+
+        return try await withCheckedThrowingContinuation { continuation in
+            self.continuation = continuation
+            let settings = AVCapturePhotoSettings()
+            settings.photoQualityPrioritization = .speed
+            settings.flashMode = .off
+            output.capturePhoto(with: settings, delegate: self)
+        }
+    }
+
+    func setExposureBias(_ value: Float) {
+        guard let device else { return }
+        let bias = min(max(value, device.minExposureTargetBias), device.maxExposureTargetBias)
+        do {
+            try device.lockForConfiguration()
+            device.setExposureTargetBias(bias)
+            device.unlockForConfiguration()
+            exposureBias = bias
+        } catch { }
+    }
+
+    func focus(at normalizedPoint: CGPoint) {
+        guard let device else { return }
+        guard !isHoldFocusLocked else { return }
+        cancelHoldFocusLock()
+        let point = CGPoint(
+            x: min(max(normalizedPoint.x, 0), 1),
+            y: min(max(normalizedPoint.y, 0), 1)
+        )
+        do {
+            try device.lockForConfiguration()
+            if device.isFocusPointOfInterestSupported {
+                device.focusPointOfInterest = point
+            }
+            if device.isFocusModeSupported(.continuousAutoFocus) {
+                device.focusMode = .continuousAutoFocus
+            } else if device.isFocusModeSupported(.autoFocus) {
+                device.focusMode = .autoFocus
+            }
+            if device.isExposurePointOfInterestSupported {
+                device.exposurePointOfInterest = point
+            }
+            if device.isExposureModeSupported(.continuousAutoExposure) {
+                device.exposureMode = .continuousAutoExposure
+            }
+            device.unlockForConfiguration()
+            isManualFocusActive = false
+        } catch { }
+    }
+
+    func setManualFocus(_ position: Float) {
+        guard let device, device.isLockingFocusWithCustomLensPositionSupported else { return }
+        guard !isHoldFocusLocked else { return }
+        cancelHoldFocusLock()
+        let clamped = min(max(position, 0), 1)
+        do {
+            try device.lockForConfiguration()
+            device.setFocusModeLocked(lensPosition: clamped)
+            device.unlockForConfiguration()
+            manualLensPosition = clamped
+            isManualFocusActive = true
+        } catch { }
+    }
+
+    func beginHoldFocusLock(at normalizedPoint: CGPoint) {
+        guard let device else { return }
+        cancelHoldFocusLock()
+
+        let point = CGPoint(
+            x: min(max(normalizedPoint.x, 0), 1),
+            y: min(max(normalizedPoint.y, 0), 1)
+        )
+        let token = UUID()
+        focusLockToken = token
+        isHoldFocusLocked = true
+
+        do {
+            try device.lockForConfiguration()
+            if device.isFocusPointOfInterestSupported {
+                device.focusPointOfInterest = point
+            }
+            if device.isFocusModeSupported(.autoFocus) {
+                device.focusMode = .autoFocus
+            }
+            device.unlockForConfiguration()
+        } catch {
+            cancelHoldFocusLock()
+            return
+        }
+
+        focusAcquisitionTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(180))
+            guard !Task.isCancelled else { return }
+            self?.lockCurrentFocus(for: token)
+        }
+    }
+
+    func endHoldFocusLock() {
+        guard isHoldFocusLocked, let token = focusLockToken else { return }
+        restoreContinuousAutofocus(for: token)
+    }
+
+    func resetFocusLockAfterCapture() {
+        endHoldFocusLock()
+    }
+
+    func setZoomFactor(_ value: CGFloat) {
+        guard let device else { return }
+        let maximum = min(device.maxAvailableVideoZoomFactor, 3)
+        let zoom = min(max(value, 1), maximum)
+        do {
+            try device.lockForConfiguration()
+            device.cancelVideoZoomRamp()
+            device.ramp(toVideoZoomFactor: zoom, withRate: 12)
+            device.unlockForConfiguration()
+            zoomFactor = zoom
+        } catch { }
+    }
+
+    private func authorizeCamera() async -> Bool {
+        switch AVCaptureDevice.authorizationStatus(for: .video) {
+        case .authorized:
+            return true
+        case .notDetermined:
+            return await withCheckedContinuation { continuation in
+                AVCaptureDevice.requestAccess(for: .video) { allowed in
+                    continuation.resume(returning: allowed)
+                }
+            }
+        case .denied, .restricted:
+            return false
+        @unknown default:
+            return false
+        }
+    }
+
+    private func configureIfNeeded() async throws {
+        guard !isConfigured else { return }
+
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            sessionQueue.async { [weak self] in
+                guard let self else {
+                    continuation.resume(throwing: CameraError.configurationFailed)
+                    return
+                }
+                do {
+                    self.session.beginConfiguration()
+                    self.session.sessionPreset = .photo
+                    defer { self.session.commitConfiguration() }
+
+                    guard let camera = self.preferredBackCamera(),
+                          let input = try? AVCaptureDeviceInput(device: camera),
+                          self.session.canAddInput(input),
+                          self.session.canAddOutput(self.output) else {
+                        throw CameraError.configurationFailed
+                    }
+
+                    self.configureAutomaticCloseFocusIfSupported(on: camera)
+                    self.session.addInput(input)
+                    self.session.addOutput(self.output)
+                    self.output.maxPhotoQualityPrioritization = .speed
+                    if let connection = self.output.connection(with: .video),
+                       connection.isVideoRotationAngleSupported(90) {
+                        connection.videoRotationAngle = 90
+                    }
+                    self.device = camera
+                    self.isConfigured = true
+                    continuation.resume(returning: ())
+                } catch {
+                    continuation.resume(throwing: error)
+                }
+            }
+        }
+    }
+
+    private nonisolated func preferredBackCamera() -> AVCaptureDevice? {
+        let discovery = AVCaptureDevice.DiscoverySession(
+            deviceTypes: [
+                .builtInTripleCamera,
+                .builtInDualWideCamera,
+                .builtInDualCamera,
+                .builtInWideAngleCamera
+            ],
+            mediaType: .video,
+            position: .back
+        )
+        return discovery.devices.first
+            ?? AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back)
+    }
+
+    private nonisolated func configureAutomaticCloseFocusIfSupported(on camera: AVCaptureDevice) {
+        guard camera.isVirtualDevice,
+              camera.activePrimaryConstituentDeviceSwitchingBehavior != .unsupported else {
+            return
+        }
+
+        do {
+            try camera.lockForConfiguration()
+            camera.fallbackPrimaryConstituentDevices = camera.supportedFallbackPrimaryConstituentDevices
+            camera.setPrimaryConstituentDeviceSwitchingBehavior(
+                .auto,
+                restrictedSwitchingBehaviorConditions: []
+            )
+            camera.unlockForConfiguration()
+        } catch { }
+    }
+
+    private func lockCurrentFocus(for token: UUID) {
+        guard focusLockToken == token,
+              isHoldFocusLocked,
+              let device,
+              device.isLockingFocusWithCustomLensPositionSupported else { return }
+
+        do {
+            let currentPosition = device.lensPosition
+            try device.lockForConfiguration()
+            device.setFocusModeLocked(lensPosition: currentPosition)
+            device.unlockForConfiguration()
+            manualLensPosition = currentPosition
+            isManualFocusActive = true
+        } catch { }
+    }
+
+    private func restoreContinuousAutofocus(for token: UUID) {
+        guard focusLockToken == token, let device else { return }
+        do {
+            try device.lockForConfiguration()
+            if device.isFocusModeSupported(.continuousAutoFocus) {
+                device.focusMode = .continuousAutoFocus
+            }
+            device.unlockForConfiguration()
+        } catch { }
+        cancelHoldFocusLock()
+        isManualFocusActive = false
+    }
+
+    private func cancelHoldFocusLock() {
+        focusAcquisitionTask?.cancel()
+        focusRestoreTask?.cancel()
+        focusAcquisitionTask = nil
+        focusRestoreTask = nil
+        focusLockToken = nil
+        isHoldFocusLocked = false
+    }
+}
+
+extension CameraManager: AVCapturePhotoCaptureDelegate {
+    nonisolated func photoOutput(
+        _ output: AVCapturePhotoOutput,
+        didFinishProcessingPhoto photo: AVCapturePhoto,
+        error: Error?
+    ) {
+        Task { @MainActor in
+            if let error {
+                continuation?.resume(throwing: error)
+                continuation = nil
+                return
+            }
+
+            guard let data = photo.fileDataRepresentation(),
+                  let image = UIImage(data: data),
+                  let squareImage = image.centerSquareCropped() else {
+                continuation?.resume(throwing: CameraError.captureFailed)
+                continuation = nil
+                return
+            }
+            continuation?.resume(returning: squareImage)
+            continuation = nil
+        }
+    }
+}
+
+private extension UIImage {
+    func centerSquareCropped() -> UIImage? {
+        let side = min(size.width, size.height)
+        guard side > 0 else { return nil }
+
+        let destination = CGRect(x: 0, y: 0, width: side, height: side)
+        let source = CGRect(
+            x: (size.width - side) / 2,
+            y: (size.height - side) / 2,
+            width: side,
+            height: side
+        )
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        format.opaque = true
+
+        return UIGraphicsImageRenderer(size: destination.size, format: format).image { _ in
+            draw(
+                in: CGRect(
+                    x: -source.minX,
+                    y: -source.minY,
+                    width: size.width,
+                    height: size.height
+                )
+            )
+        }
+    }
+}
+
+enum CameraError: LocalizedError {
+    case notReady
+    case configurationFailed
+    case captureFailed
+
+    var errorDescription: String? {
+        switch self {
+        case .notReady: return "The camera is not ready for an exposure."
+        case .configurationFailed: return "The camera could not be configured."
+        case .captureFailed: return "The exposure could not be recorded."
+        }
+    }
+}

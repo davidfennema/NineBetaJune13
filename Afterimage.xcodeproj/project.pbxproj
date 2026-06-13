@@ -1,0 +1,350 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		B10000000000000000000001 /* AfterimageApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000001 /* AfterimageApp.swift */; };
+		B10000000000000000000002 /* RollModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000002 /* RollModel.swift */; };
+		B10000000000000000000003 /* RollViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000003 /* RollViewModel.swift */; };
+		B10000000000000000000004 /* CameraManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000004 /* CameraManager.swift */; };
+		B10000000000000000000005 /* PreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000005 /* PreviewView.swift */; };
+		B10000000000000000000006 /* BlendEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000006 /* BlendEngine.swift */; };
+		B10000000000000000000007 /* GridRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000007 /* GridRenderer.swift */; };
+		B10000000000000000000008 /* RollStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000008 /* RollStore.swift */; };
+		B10000000000000000000009 /* PhotoLibrarySaver.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000009 /* PhotoLibrarySaver.swift */; };
+		B10000000000000000000010 /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000010 /* HomeView.swift */; };
+		B10000000000000000000011 /* CameraView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000011 /* CameraView.swift */; };
+		B10000000000000000000012 /* DevelopingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000012 /* DevelopingView.swift */; };
+		B10000000000000000000013 /* RevealView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000013 /* RevealView.swift */; };
+		B10000000000000000000014 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000016 /* Assets.xcassets */; };
+		B10000000000000000000015 /* ExposureCounterView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000017 /* ExposureCounterView.swift */; };
+		B10000000000000000000016 /* RollTitleGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000018 /* RollTitleGenerator.swift */; };
+		B10000000000000000000017 /* EditableRollTitleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000019 /* EditableRollTitleView.swift */; };
+		B10000000000000000000018 /* ShareRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000020 /* ShareRenderer.swift */; };
+		B10000000000000000000019 /* SharePreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000021 /* SharePreviewView.swift */; };
+		B10000000000000000000020 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000022 /* SettingsView.swift */; };
+		B10000000000000000000021 /* ViewfinderInfoOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000023 /* ViewfinderInfoOverlay.swift */; };
+		B10000000000000000000022 /* AfterimageDesignSystem.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000024 /* AfterimageDesignSystem.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		A10000000000000000000001 /* AfterimageApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AfterimageApp.swift; sourceTree = "<group>"; };
+		A10000000000000000000002 /* RollModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RollModel.swift; sourceTree = "<group>"; };
+		A10000000000000000000003 /* RollViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RollViewModel.swift; sourceTree = "<group>"; };
+		A10000000000000000000004 /* CameraManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraManager.swift; sourceTree = "<group>"; };
+		A10000000000000000000005 /* PreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewView.swift; sourceTree = "<group>"; };
+		A10000000000000000000006 /* BlendEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlendEngine.swift; sourceTree = "<group>"; };
+		A10000000000000000000007 /* GridRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GridRenderer.swift; sourceTree = "<group>"; };
+		A10000000000000000000008 /* RollStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RollStore.swift; sourceTree = "<group>"; };
+		A10000000000000000000009 /* PhotoLibrarySaver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoLibrarySaver.swift; sourceTree = "<group>"; };
+		A10000000000000000000010 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
+		A10000000000000000000011 /* CameraView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraView.swift; sourceTree = "<group>"; };
+		A10000000000000000000012 /* DevelopingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DevelopingView.swift; sourceTree = "<group>"; };
+		A10000000000000000000013 /* RevealView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RevealView.swift; sourceTree = "<group>"; };
+		A10000000000000000000014 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		A10000000000000000000015 /* Nine.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Nine.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A10000000000000000000016 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		A10000000000000000000017 /* ExposureCounterView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExposureCounterView.swift; sourceTree = "<group>"; };
+		A10000000000000000000018 /* RollTitleGenerator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RollTitleGenerator.swift; sourceTree = "<group>"; };
+		A10000000000000000000019 /* EditableRollTitleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditableRollTitleView.swift; sourceTree = "<group>"; };
+		A10000000000000000000020 /* ShareRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareRenderer.swift; sourceTree = "<group>"; };
+		A10000000000000000000021 /* SharePreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharePreviewView.swift; sourceTree = "<group>"; };
+		A10000000000000000000022 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		A10000000000000000000023 /* ViewfinderInfoOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewfinderInfoOverlay.swift; sourceTree = "<group>"; };
+		A10000000000000000000024 /* AfterimageDesignSystem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AfterimageDesignSystem.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		D10000000000000000000001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		E10000000000000000000001 = {
+			isa = PBXGroup;
+			children = (
+				E10000000000000000000003 /* Afterimage */,
+				E10000000000000000000002 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		E10000000000000000000002 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				A10000000000000000000015 /* Nine.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		E10000000000000000000003 /* Afterimage */ = {
+			isa = PBXGroup;
+			children = (
+				A10000000000000000000001 /* AfterimageApp.swift */,
+				E10000000000000000000004 /* Camera */,
+				E10000000000000000000005 /* Roll */,
+				E10000000000000000000006 /* Processing */,
+				E10000000000000000000007 /* Persistence */,
+				E10000000000000000000008 /* Views */,
+				A10000000000000000000016 /* Assets.xcassets */,
+				A10000000000000000000014 /* Info.plist */,
+			);
+			path = Afterimage;
+			sourceTree = "<group>";
+		};
+		E10000000000000000000004 /* Camera */ = {
+			isa = PBXGroup;
+			children = (
+				A10000000000000000000004 /* CameraManager.swift */,
+				A10000000000000000000005 /* PreviewView.swift */,
+			);
+			path = Camera;
+			sourceTree = "<group>";
+		};
+		E10000000000000000000005 /* Roll */ = {
+			isa = PBXGroup;
+			children = (
+				A10000000000000000000002 /* RollModel.swift */,
+				A10000000000000000000018 /* RollTitleGenerator.swift */,
+				A10000000000000000000003 /* RollViewModel.swift */,
+			);
+			path = Roll;
+			sourceTree = "<group>";
+		};
+		E10000000000000000000006 /* Processing */ = {
+			isa = PBXGroup;
+			children = (
+				A10000000000000000000006 /* BlendEngine.swift */,
+				A10000000000000000000007 /* GridRenderer.swift */,
+				A10000000000000000000020 /* ShareRenderer.swift */,
+			);
+			path = Processing;
+			sourceTree = "<group>";
+		};
+		E10000000000000000000007 /* Persistence */ = {
+			isa = PBXGroup;
+			children = (
+				A10000000000000000000008 /* RollStore.swift */,
+				A10000000000000000000009 /* PhotoLibrarySaver.swift */,
+			);
+			path = Persistence;
+			sourceTree = "<group>";
+		};
+		E10000000000000000000008 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				A10000000000000000000024 /* AfterimageDesignSystem.swift */,
+				A10000000000000000000010 /* HomeView.swift */,
+				A10000000000000000000011 /* CameraView.swift */,
+				A10000000000000000000017 /* ExposureCounterView.swift */,
+				A10000000000000000000023 /* ViewfinderInfoOverlay.swift */,
+				A10000000000000000000019 /* EditableRollTitleView.swift */,
+				A10000000000000000000021 /* SharePreviewView.swift */,
+				A10000000000000000000022 /* SettingsView.swift */,
+				A10000000000000000000012 /* DevelopingView.swift */,
+				A10000000000000000000013 /* RevealView.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		F10000000000000000000001 /* Nine */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = F10000000000000000000004 /* Build configuration list for PBXNativeTarget "Nine" */;
+			buildPhases = (
+				D10000000000000000000003 /* Sources */,
+				D10000000000000000000001 /* Frameworks */,
+				D10000000000000000000002 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = Nine;
+			productName = Nine;
+			productReference = A10000000000000000000015 /* Nine.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		F10000000000000000000002 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2650;
+				LastUpgradeCheck = 2650;
+				TargetAttributes = {
+					F10000000000000000000001 = {
+						CreatedOnToolsVersion = 26.5;
+					};
+				};
+			};
+			buildConfigurationList = F10000000000000000000003 /* Build configuration list for PBXProject "Afterimage" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = E10000000000000000000001;
+			productRefGroup = E10000000000000000000002 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				F10000000000000000000001 /* Nine */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		D10000000000000000000002 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B10000000000000000000014 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		D10000000000000000000003 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B10000000000000000000001 /* AfterimageApp.swift in Sources */,
+				B10000000000000000000002 /* RollModel.swift in Sources */,
+				B10000000000000000000003 /* RollViewModel.swift in Sources */,
+				B10000000000000000000016 /* RollTitleGenerator.swift in Sources */,
+				B10000000000000000000004 /* CameraManager.swift in Sources */,
+				B10000000000000000000005 /* PreviewView.swift in Sources */,
+				B10000000000000000000006 /* BlendEngine.swift in Sources */,
+				B10000000000000000000007 /* GridRenderer.swift in Sources */,
+				B10000000000000000000018 /* ShareRenderer.swift in Sources */,
+				B10000000000000000000008 /* RollStore.swift in Sources */,
+				B10000000000000000000009 /* PhotoLibrarySaver.swift in Sources */,
+				B10000000000000000000010 /* HomeView.swift in Sources */,
+				B10000000000000000000011 /* CameraView.swift in Sources */,
+				B10000000000000000000022 /* AfterimageDesignSystem.swift in Sources */,
+				B10000000000000000000015 /* ExposureCounterView.swift in Sources */,
+				B10000000000000000000021 /* ViewfinderInfoOverlay.swift in Sources */,
+				B10000000000000000000017 /* EditableRollTitleView.swift in Sources */,
+				B10000000000000000000019 /* SharePreviewView.swift in Sources */,
+				B10000000000000000000020 /* SettingsView.swift in Sources */,
+				B10000000000000000000012 /* DevelopingView.swift in Sources */,
+				B10000000000000000000013 /* RevealView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		C10000000000000000000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		C10000000000000000000002 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		C10000000000000000000003 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = LH5L8WMW7Z;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Afterimage/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.afterimage.camera;
+				PRODUCT_NAME = Nine;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		C10000000000000000000004 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = LH5L8WMW7Z;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Afterimage/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.afterimage.camera;
+				PRODUCT_NAME = Nine;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		F10000000000000000000003 /* Build configuration list for PBXProject "Afterimage" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C10000000000000000000001 /* Debug */,
+				C10000000000000000000002 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		F10000000000000000000004 /* Build configuration list for PBXNativeTarget "Nine" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C10000000000000000000003 /* Debug */,
+				C10000000000000000000004 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = F10000000000000000000002 /* Project object */;
+}
