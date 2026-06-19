@@ -30,7 +30,7 @@ enum RollMode: String, Codable, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .freeform: return "Freeform"
+        case .freeform: return "Natural"
         case .desaturated: return "Desaturated"
         case .blackAndWhite: return "Black & White"
         case .highContrast: return "High Contrast"

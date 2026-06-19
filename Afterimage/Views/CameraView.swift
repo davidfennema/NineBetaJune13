@@ -264,7 +264,7 @@ struct CameraView: View {
     }
 
     private var rollStyleLabel: some View {
-        Text(roll?.mode.title ?? "Freeform")
+        Text(roll?.mode.title ?? "Natural")
             .font(AfterimageType.caption)
             .tracking(0.45)
             .foregroundStyle(.white.opacity(0.36))

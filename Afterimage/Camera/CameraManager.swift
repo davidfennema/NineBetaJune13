@@ -95,10 +95,11 @@ final class CameraManager: NSObject, ObservableObject {
             settings.flashMode = .off
             if let connection = output.connection(with: .video),
                connection.isVideoMirroringSupported {
-                // Front preview is mirrored to feel natural while composing, but captures are
-                // saved unmirrored so first/second pass pairs and exports share one stable orientation.
+                // Keep front-camera captures mirrored because the front preview is mirrored.
+                // This preserves the user's composition across preview, captured frames,
+                // blend preview, contact sheet, and exported images.
                 connection.automaticallyAdjustsVideoMirroring = false
-                connection.isVideoMirrored = false
+                connection.isVideoMirrored = cameraPosition == .front
             }
             output.capturePhoto(with: settings, delegate: self)
         }
@@ -148,7 +149,6 @@ final class CameraManager: NSObject, ObservableObject {
 
     func focus(at normalizedPoint: CGPoint) {
         guard let device else { return }
-        guard !isHoldFocusLocked else { return }
         cancelHoldFocusLock()
         let point = CGPoint(
             x: min(max(normalizedPoint.x, 0), 1),

@@ -29,6 +29,7 @@
 		B10000000000000000000020 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000022 /* SettingsView.swift */; };
 		B10000000000000000000021 /* ViewfinderInfoOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000023 /* ViewfinderInfoOverlay.swift */; };
 		B10000000000000000000022 /* AfterimageDesignSystem.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000024 /* AfterimageDesignSystem.swift */; };
+		B10000000000000000000023 /* IntroView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000025 /* IntroView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -56,6 +57,7 @@
 		A10000000000000000000022 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		A10000000000000000000023 /* ViewfinderInfoOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewfinderInfoOverlay.swift; sourceTree = "<group>"; };
 		A10000000000000000000024 /* AfterimageDesignSystem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AfterimageDesignSystem.swift; sourceTree = "<group>"; };
+		A10000000000000000000025 /* IntroView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IntroView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -142,6 +144,7 @@
 			isa = PBXGroup;
 			children = (
 				A10000000000000000000024 /* AfterimageDesignSystem.swift */,
+				A10000000000000000000025 /* IntroView.swift */,
 				A10000000000000000000010 /* HomeView.swift */,
 				A10000000000000000000011 /* CameraView.swift */,
 				A10000000000000000000017 /* ExposureCounterView.swift */,
@@ -238,6 +241,7 @@
 				B10000000000000000000010 /* HomeView.swift in Sources */,
 				B10000000000000000000011 /* CameraView.swift in Sources */,
 				B10000000000000000000022 /* AfterimageDesignSystem.swift in Sources */,
+				B10000000000000000000023 /* IntroView.swift in Sources */,
 				B10000000000000000000015 /* ExposureCounterView.swift in Sources */,
 				B10000000000000000000021 /* ViewfinderInfoOverlay.swift in Sources */,
 				B10000000000000000000017 /* EditableRollTitleView.swift in Sources */,

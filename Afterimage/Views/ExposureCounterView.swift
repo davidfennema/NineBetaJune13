@@ -90,6 +90,9 @@ struct ExposureCounterView: View {
                             .blur(radius: 0.2)
                             .offset(y: 0.5)
                     }
+                    .overlay {
+                        counterGlassHighlight
+                    }
                 }
 
             ZStack {
@@ -123,6 +126,30 @@ struct ExposureCounterView: View {
 
     private var accessibilityText: String {
         "Frame \(frameNumber)"
+    }
+
+    private var counterGlassHighlight: some View {
+        GeometryReader { proxy in
+            let width = proxy.size.width
+            let height = proxy.size.height
+
+            LinearGradient(
+                colors: [
+                    tint.opacity(0),
+                    tint.opacity(0.055),
+                    tint.opacity(0.018),
+                    tint.opacity(0)
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            .frame(width: width * 0.56, height: height * 1.45)
+            .rotationEffect(.degrees(25))
+            .offset(x: width * 0.02, y: -height * 0.30)
+            .blur(radius: 0.8)
+            .allowsHitTesting(false)
+        }
+        .clipShape(Circle())
     }
 
     private func counterText(_ text: String) -> some View {

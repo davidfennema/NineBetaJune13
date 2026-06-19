@@ -6,8 +6,10 @@ struct HomeView: View {
     var onStartRoll: ((RollMode, Bool) async -> Void)?
     var onOpenRoll: ((Roll) -> Void)?
     @State private var selectedMode: RollMode = .freeform
+    @State private var replacementMode: RollMode = .freeform
     @State private var showsAbout = false
     @State private var showsStartOverConfirmation = false
+    @State private var showsReplacementStylePicker = false
 
     var body: some View {
         let _ = print("[Nine] HomeView body rendered · activeRoll exists: \(viewModel.activeRoll != nil) · resumeState exists: \(viewModel.resumeState != nil)")
@@ -28,10 +30,11 @@ struct HomeView: View {
                         .accessibilityAddTraits(.isButton)
                         .accessibilityLabel("About Nine")
 
-                    createSection
-
                     if viewModel.hasInProgressRoll {
                         resumeSection
+                        startNewRollButton
+                    } else {
+                        createSection
                     }
 
                     if !viewModel.storedRolls.isEmpty {
@@ -55,19 +58,21 @@ struct HomeView: View {
         .onAppear {
             print("[Nine] HomeView appeared")
         }
-        .sheet(isPresented: $showsAbout) {
-            NineInfoNoteView(
-                text: "Nine is a double-exposure camera.\n\nShoot nine frames, then re-load the roll and shoot nine more.\n\nEnjoy the unexpected."
-            )
+        .fullScreenCover(isPresented: $showsAbout) {
+            IntroView(buttonTitle: "Done") {
+                showsAbout = false
+            }
+        }
+        .sheet(isPresented: $showsReplacementStylePicker) {
+            replacementStyleSheet
                 .presentationDetents([.medium])
                 .presentationDragIndicator(.visible)
         }
         .alert("Start New Roll?", isPresented: $showsStartOverConfirmation) {
             Button("Cancel", role: .cancel) { }
             Button("Start Over", role: .destructive) {
-                Task {
-                    await onStartRoll?(selectedMode, true)
-                }
+                replacementMode = activeRollMode ?? selectedMode
+                showsReplacementStylePicker = true
             }
         } message: {
             Text("Your current roll is not complete.\n\nStarting a new roll will discard it.")
@@ -113,15 +118,63 @@ struct HomeView: View {
             } label: {
                 Text("Start New Roll")
                     .font(AfterimageType.primaryAction)
-                    .foregroundStyle(.black.opacity(0.92))
+                    .foregroundStyle(viewModel.hasInProgressRoll ? .white.opacity(0.76) : .black.opacity(0.92))
                     .frame(maxWidth: .infinity, minHeight: 46)
-                    .background(.white.opacity(0.92), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    .background(
+                        viewModel.hasInProgressRoll ? .white.opacity(0.065) : .white.opacity(0.92),
+                        in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    )
+                    .overlay {
+                        if viewModel.hasInProgressRoll {
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .stroke(.white.opacity(0.12), lineWidth: 1)
+                        }
+                    }
             }
             .buttonStyle(.plain)
         }
     }
 
+    private var replacementStyleSheet: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+
+            VStack(spacing: 24) {
+                Text("Choose Style")
+                    .font(.system(size: 18, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.86))
+
+                replacementModeSelection
+
+                Button {
+                    selectedMode = replacementMode
+                    showsReplacementStylePicker = false
+                    Task {
+                        await onStartRoll?(replacementMode, true)
+                    }
+                } label: {
+                    Text("Begin Roll")
+                        .font(AfterimageType.primaryAction)
+                        .foregroundStyle(.black.opacity(0.92))
+                        .frame(maxWidth: .infinity, minHeight: 48)
+                        .background(.white.opacity(0.92), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 24)
+            .padding(.vertical, 28)
+        }
+    }
+
     private var modeSelection: some View {
+        modeSelection(selectedMode: $selectedMode)
+    }
+
+    private var replacementModeSelection: some View {
+        modeSelection(selectedMode: $replacementMode)
+    }
+
+    private func modeSelection(selectedMode: Binding<RollMode>) -> some View {
         VStack(alignment: .center, spacing: 10) {
             LazyVGrid(
                 columns: Array(repeating: GridItem(.fixed(118), spacing: 18, alignment: .center), count: 2),
@@ -130,11 +183,11 @@ struct HomeView: View {
             ) {
                 ForEach(RollMode.allCases) { mode in
                     Button {
-                        selectedMode = mode
+                        selectedMode.wrappedValue = mode
                     } label: {
                         ModeRadioRow(
                             title: mode.title,
-                            isSelected: selectedMode == mode
+                            isSelected: selectedMode.wrappedValue == mode
                         )
                     }
                     .buttonStyle(.plain)
@@ -142,6 +195,12 @@ struct HomeView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .center)
+    }
+
+    private var activeRollMode: RollMode? {
+        viewModel.activeRoll?.mode
+            ?? viewModel.resumableRoll?.mode
+            ?? viewModel.resumeState?.mode
     }
 
     private var archiveList: some View {
@@ -153,20 +212,26 @@ struct HomeView: View {
 
             List {
                 ForEach(viewModel.storedRolls) { roll in
-                    ArchiveRollRow(roll: roll)
-                    .onTapGesture {
+                    Button {
+                        guard !showsStartOverConfirmation else { return }
                         if let onOpenRoll {
                             onOpenRoll(roll)
                         } else {
                             viewModel.open(roll)
                         }
+                    } label: {
+                        ArchiveRollRow(roll: roll)
                     }
+                    .buttonStyle(.plain)
+                    .contentShape(Rectangle())
                     .listRowInsets(EdgeInsets(top: 5, leading: 0, bottom: 5, trailing: 0))
                     .listRowSeparator(.hidden)
                     .listRowBackground(Color.clear)
                     .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                         Button(role: .destructive) {
-                            viewModel.deleteStoredRoll(roll)
+                            withAnimation(AfterimageMotion.standard) {
+                                viewModel.deleteStoredRoll(roll)
+                            }
                         } label: {
                             Label("Delete", systemImage: "trash")
                         }

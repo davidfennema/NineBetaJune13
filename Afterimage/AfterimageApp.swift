@@ -19,10 +19,11 @@ struct NineApp: App {
 struct RootView: View {
     @ObservedObject var viewModel: RollViewModel
     @Environment(\.scenePhase) private var scenePhase
+    @AppStorage("nine.hasSeenIntro") private var hasSeenIntro = false
     @State private var launchDestination: LaunchDestination = .resolving
     @State private var routeDirection: RouteDirection = .forward
     @State private var isReturningFromReveal = false
-    private let routeAnimation = Animation.easeInOut(duration: 0.22)
+    private let routeAnimation = Animation.smooth(duration: 0.21, extraBounce: 0)
 
     var body: some View {
         GeometryReader { geometry in
@@ -31,6 +32,8 @@ struct RootView: View {
                 switch launchDestination {
                 case .resolving:
                     Color.black.ignoresSafeArea()
+                case .intro:
+                    IntroView(onBegin: completeIntro)
                 case .home:
                     if showsCompletedRollScreen {
                         revealHomeContainer(width: geometry.size.width)
@@ -76,6 +79,8 @@ struct RootView: View {
             await viewModel.loadRolls()
             if let roll = await viewModel.resolveLaunchResumeRoll() {
                 launchDestination = .camera(roll)
+            } else if !hasSeenIntro {
+                launchDestination = .intro
             } else {
                 launchDestination = .home
             }
@@ -83,6 +88,14 @@ struct RootView: View {
         .onChange(of: scenePhase) { _, newPhase in
             Task {
                 await viewModel.handleScenePhase(newPhase)
+            }
+        }
+        .onChange(of: viewModel.activeRoll?.phase) { _, newPhase in
+            guard newPhase == .complete,
+                  let roll = viewModel.activeRoll else { return }
+            routeDirection = .forward
+            withAnimation(routeAnimation) {
+                launchDestination = .reveal(roll)
             }
         }
     }
@@ -200,6 +213,14 @@ struct RootView: View {
         }
     }
 
+    private func completeIntro() {
+        hasSeenIntro = true
+        routeDirection = .forward
+        withAnimation(routeAnimation) {
+            launchDestination = .home
+        }
+    }
+
     private func startRoll(mode: RollMode, discardingCurrentRoll: Bool) async {
         if discardingCurrentRoll {
             await viewModel.discardResumableAndStart(mode: mode)
@@ -245,6 +266,8 @@ struct RootView: View {
         switch launchDestination {
         case .resolving:
             return "resolving"
+        case .intro:
+            return "intro"
         case .home:
             return "home"
         case .camera:
@@ -267,6 +290,7 @@ struct RootView: View {
 
 private enum LaunchDestination {
     case resolving
+    case intro
     case home
     case camera(Roll)
     case reveal(Roll)
