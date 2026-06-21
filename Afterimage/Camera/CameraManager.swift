@@ -189,8 +189,9 @@ final class CameraManager: NSObject, ObservableObject {
         } catch { }
     }
 
-    func beginHoldFocusLock(at normalizedPoint: CGPoint) {
-        guard let device else { return }
+    @discardableResult
+    func beginHoldFocusLock(at normalizedPoint: CGPoint) -> Bool {
+        guard let device else { return false }
         cancelHoldFocusLock()
 
         let point = CGPoint(
@@ -212,7 +213,7 @@ final class CameraManager: NSObject, ObservableObject {
             device.unlockForConfiguration()
         } catch {
             cancelHoldFocusLock()
-            return
+            return false
         }
 
         focusAcquisitionTask = Task { [weak self] in
@@ -220,6 +221,7 @@ final class CameraManager: NSObject, ObservableObject {
             guard !Task.isCancelled else { return }
             self?.lockCurrentFocus(for: token)
         }
+        return true
     }
 
     func endHoldFocusLock() {

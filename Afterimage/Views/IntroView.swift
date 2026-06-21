@@ -1,21 +1,19 @@
 import SwiftUI
 
 struct IntroView: View {
-    var buttonTitle = "Begin"
+    var buttonTitle = "Let's Go"
     let onBegin: () -> Void
-
-    private static let heroImages = [
-        "IntroHero01",
-        "IntroHero02",
-        "IntroHero03",
-        "IntroHero04"
+    private let sampleImages = [
+        "IntroHero",
+        "IntroCarousel01",
+        "IntroCarousel02",
+        "IntroCarousel03"
     ]
-    @State private var selectedHeroImage: String
+    @State private var selectedSampleIndex = 0
 
-    init(buttonTitle: String = "Begin", onBegin: @escaping () -> Void) {
+    init(buttonTitle: String = "Let's Go", onBegin: @escaping () -> Void) {
         self.buttonTitle = buttonTitle
         self.onBegin = onBegin
-        _selectedHeroImage = State(initialValue: Self.heroImages.randomElement() ?? "IntroHero01")
     }
 
     var body: some View {
@@ -24,7 +22,10 @@ struct IntroView: View {
                 Color.black.ignoresSafeArea()
 
                 VStack(spacing: 0) {
-                    IntroHeroImage(name: selectedHeroImage)
+                    IntroHeroCarousel(
+                        imageNames: sampleImages,
+                        selectedIndex: $selectedSampleIndex
+                    )
                         .frame(height: geometry.size.height * 0.66)
                         .clipped()
                         .overlay(alignment: .bottom) {
@@ -110,6 +111,21 @@ struct IntroView: View {
             .stroke(.white.opacity(0.09), lineWidth: 1)
         }
         .shadow(color: .black.opacity(0.32), radius: 22, y: 12)
+    }
+}
+
+private struct IntroHeroCarousel: View {
+    let imageNames: [String]
+    @Binding var selectedIndex: Int
+
+    var body: some View {
+        TabView(selection: $selectedIndex) {
+            ForEach(Array(imageNames.enumerated()), id: \.offset) { index, name in
+                IntroHeroImage(name: name)
+                    .tag(index)
+            }
+        }
+        .tabViewStyle(.page(indexDisplayMode: .never))
     }
 }
 

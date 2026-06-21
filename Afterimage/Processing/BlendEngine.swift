@@ -41,8 +41,11 @@ final class BlendEngine {
             for: mode
         ).cropped(to: extent)
 
-        let balancedFirst = exposureAdjusted(normalizedFirst, by: Float(-0.18 - value.balance))
-        let balancedSecond = exposureAdjusted(translatedSecond, by: Float(-0.18 + value.balance))
+        // Screen is mathematically symmetric, but broad bright tones in the first pass can
+        // leave less room for second-pass detail. This slight pre-blend split preserves
+        // the Screen character while keeping the second exposure present.
+        let balancedFirst = exposureAdjusted(normalizedFirst, by: Float(-0.24 - value.balance))
+        let balancedSecond = exposureAdjusted(translatedSecond, by: Float(-0.12 + value.balance))
 
         let blend = CIFilter.screenBlendMode()
         blend.inputImage = balancedSecond

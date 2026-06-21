@@ -401,7 +401,9 @@ struct CameraView: View {
                 isHoldingFocusLock = true
                 suppressNextTap = true
                 showLockedFeedback(at: point)
-                camera.beginHoldFocusLock(at: normalizedCameraPoint(from: point, side: side))
+                if camera.beginHoldFocusLock(at: normalizedCameraPoint(from: point, side: side)) {
+                    triggerFocusLockFeedback()
+                }
                 if !didShowFocusLockHint {
                     didShowFocusLockHint = true
                     showContextualHint("AF LOCK\nDrag left or right to adjust exposure")
@@ -483,6 +485,12 @@ struct CameraView: View {
         let feedback = UIImpactFeedbackGenerator(style: .light)
         feedback.prepare()
         feedback.impactOccurred(intensity: 0.82)
+    }
+
+    private func triggerFocusLockFeedback() {
+        let feedback = UIImpactFeedbackGenerator(style: .light)
+        feedback.prepare()
+        feedback.impactOccurred(intensity: 0.58)
     }
 
     private func triggerExposureTickIfNeeded(for bias: Float) {

@@ -59,7 +59,7 @@ struct HomeView: View {
             print("[Nine] HomeView appeared")
         }
         .fullScreenCover(isPresented: $showsAbout) {
-            IntroView(buttonTitle: "Done") {
+            IntroView {
                 showsAbout = false
             }
         }
