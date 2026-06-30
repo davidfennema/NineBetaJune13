@@ -32,6 +32,10 @@ enum AfterimageLayout {
             centerX: geometry.size.width / 2
         )
     }
+
+    static func closeControlY(in geometry: GeometryProxy) -> CGFloat {
+        max(22, geometry.safeAreaInsets.top * 0.45)
+    }
 }
 
 struct AfterimageImageStage {
@@ -113,6 +117,22 @@ struct AfterimageBackButton: View {
         }
         .buttonStyle(AfterimagePressButtonStyle())
         .accessibilityLabel("Back")
+    }
+}
+
+struct AfterimageCloseButton: View {
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "xmark")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(.white.opacity(0.5))
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(AfterimagePressButtonStyle())
+        .accessibilityLabel("Close")
     }
 }
 

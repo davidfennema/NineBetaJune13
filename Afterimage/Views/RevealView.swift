@@ -47,6 +47,15 @@ struct RevealView: View {
                     .position(x: 12, y: geometry.size.height / 2)
                     .zIndex(2)
 
+                AfterimageCloseButton {
+                    onReturnHome?()
+                }
+                .position(
+                    x: AfterimageLayout.margin,
+                    y: AfterimageLayout.closeControlY(in: geometry)
+                )
+                .zIndex(4)
+
                 if let message = viewModel.statusMessage {
                     toast(message)
                         .transition(AfterimageMotion.toastTransition)
@@ -111,15 +120,25 @@ struct RevealView: View {
     private var contactSheet: some View {
         LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 5), count: 3), spacing: 5) {
             ForEach(Array(images.enumerated()), id: \.offset) { index, image in
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFill()
-                    .frame(maxWidth: .infinity)
-                    .aspectRatio(1, contentMode: .fit)
-                    .clipped()
-                    .opacity(index < visibleFrameCount ? 1 : 0)
-                    .scaleEffect(index < visibleFrameCount ? 1 : 0.985)
-                    .offset(y: index < visibleFrameCount ? 0 : 6)
+                Button {
+                    withAnimation(AfterimageMotion.standard) {
+                        pageIndex = index + 1
+                    }
+                } label: {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(maxWidth: .infinity)
+                        .aspectRatio(1, contentMode: .fit)
+                        .clipped()
+                        .opacity(index < visibleFrameCount ? 1 : 0)
+                        .scaleEffect(index < visibleFrameCount ? 1 : 0.985)
+                        .offset(y: index < visibleFrameCount ? 0 : 6)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(AfterimagePressButtonStyle())
+                .disabled(index >= visibleFrameCount)
+                .accessibilityLabel("Open frame \(index + 1)")
             }
         }
         .background(.black)

@@ -20,7 +20,7 @@ struct HomeView: View {
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 22) {
                     NineBrandMark()
-                        .frame(width: 144, height: 144)
+                        .frame(width: 188, height: 188)
                         .padding(.top, 68)
                         .padding(.bottom, 12)
                         .contentShape(Rectangle())

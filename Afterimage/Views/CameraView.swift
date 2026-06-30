@@ -32,6 +32,17 @@ struct CameraView: View {
             return 0
         case .desaturated:
             return 0.42
+        case .highContrast:
+            return 1.08
+        default:
+            return 1
+        }
+    }
+
+    private var previewContrast: Double {
+        switch roll?.mode {
+        case .highContrast:
+            return 1.22
         default:
             return 1
         }
@@ -80,6 +91,15 @@ struct CameraView: View {
                     .position(x: 12, y: geometry.size.height / 2)
                     .zIndex(3)
 
+                AfterimageCloseButton {
+                    onReturnHome?()
+                }
+                .position(
+                    x: AfterimageLayout.margin,
+                    y: AfterimageLayout.closeControlY(in: geometry)
+                )
+                .zIndex(5)
+
                 if camera.authorizationDenied {
                     permissionNotice
                 }
@@ -115,6 +135,7 @@ struct CameraView: View {
             PreviewView(session: camera.session, isMirrored: camera.isPreviewMirrored)
                 .frame(width: side, height: side)
                 .saturation(previewSaturation)
+                .contrast(previewContrast)
 
             if let ghost = roll?.correspondingFirstExposure {
                 Image(uiImage: ghost)
@@ -123,6 +144,7 @@ struct CameraView: View {
                     .frame(width: side, height: side)
                     .blur(radius: 0.7)
                     .saturation(previewSaturation)
+                    .contrast(previewContrast)
                     .opacity(0.58)
                     .blendMode(.screen)
                     .allowsHitTesting(false)
