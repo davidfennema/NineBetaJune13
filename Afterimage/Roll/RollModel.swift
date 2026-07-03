@@ -49,6 +49,7 @@ enum RollMode: String, Codable, CaseIterable, Identifiable {
 
 enum RollPhase: String, Codable {
     case firstPass
+    case awaitingSecondPass
     case secondPass
     case developing
     case complete
@@ -65,7 +66,7 @@ func shouldResumeToCamera(_ roll: Roll?) -> Bool {
     case .secondPass:
         return roll.firstPassImages.count == Roll.frameCount
             && roll.secondPassImages.count < Roll.frameCount
-    case .developing, .complete:
+    case .awaitingSecondPass, .developing, .complete:
         return false
     }
 }
@@ -84,7 +85,7 @@ func isValidResumeRoll(_ roll: Roll?, resume: ResumeRollState?) -> Bool {
         return roll.firstPassImages.count < Roll.frameCount
     case .secondPass:
         return roll.secondPassImages.count < Roll.frameCount
-    case .developing, .complete:
+    case .awaitingSecondPass, .developing, .complete:
         return false
     }
 }
@@ -164,7 +165,14 @@ struct Roll: Identifiable, Codable {
     }
 
     var capturedFrameCount: Int {
-        phase == .firstPass ? firstPassImages.count : secondPassImages.count
+        switch phase {
+        case .firstPass, .awaitingSecondPass:
+            return firstPassImages.count
+        case .secondPass:
+            return secondPassImages.count
+        case .developing, .complete:
+            return Roll.frameCount
+        }
     }
 
     var requiresCaptureInput: Bool {
@@ -185,10 +193,12 @@ struct Roll: Identifiable, Codable {
             guard firstPassImages.count < Self.frameCount else { throw RollError.passAlreadyFull }
             firstPassImages.append(frame)
             if firstPassImages.count == Self.frameCount {
-                phase = .secondPass
+                phase = .awaitingSecondPass
                 return .firstPassComplete
             }
             return .frameCaptured
+        case .awaitingSecondPass:
+            throw RollError.captureUnavailable
         case .secondPass:
             guard firstPassImages.count == Self.frameCount else { throw RollError.firstPassIncomplete }
             guard secondPassImages.count < Self.frameCount else { throw RollError.passAlreadyFull }
@@ -201,6 +211,15 @@ struct Roll: Identifiable, Codable {
         case .developing, .complete:
             throw RollError.captureUnavailable
         }
+    }
+
+    mutating func beginSecondPass() throws {
+        guard phase == .awaitingSecondPass,
+              firstPassImages.count == Self.frameCount else {
+            throw RollError.firstPassIncomplete
+        }
+        phase = .secondPass
+        updatedAt = Date()
     }
 
     mutating func finishDevelopment(images: [UIImage], gridImage: UIImage?) throws {

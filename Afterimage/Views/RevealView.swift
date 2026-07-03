@@ -61,6 +61,12 @@ struct RevealView: View {
                         .transition(AfterimageMotion.toastTransition)
                         .zIndex(3)
                 }
+
+                if let message = viewModel.savedOverlayMessage {
+                    savedOverlay(message)
+                        .transition(AfterimageMotion.toastTransition)
+                        .zIndex(10)
+                }
             }
         }
         .sheet(item: $shareItem) { item in
@@ -160,7 +166,7 @@ struct RevealView: View {
                 .contentTransition(.opacity)
 
             Text("›")
-                .opacity(pageIndex < images.count ? 1 : 0)
+                .opacity(pageIndex > 0 && pageIndex < images.count ? 1 : 0)
         }
         .font(AfterimageType.caption)
         .foregroundStyle(.white.opacity(0.52))
@@ -172,8 +178,8 @@ struct RevealView: View {
 
     private func underImageControlRow(width: CGFloat) -> some View {
         HStack(alignment: .center, spacing: 10) {
-            Color.clear
-                .frame(width: 44, height: 38)
+            contactSheetIconButton
+                .frame(width: 44, alignment: .leading)
 
             Spacer(minLength: 10)
 
@@ -186,6 +192,23 @@ struct RevealView: View {
                 .frame(width: 44, alignment: .trailing)
         }
         .frame(width: width, height: 40)
+    }
+
+    private var contactSheetIconButton: some View {
+        Button {
+            withAnimation(AfterimageMotion.standard) {
+                pageIndex = 0
+            }
+        } label: {
+            Image(systemName: "square.grid.3x3")
+                .font(.system(size: 17, weight: .medium))
+                .foregroundStyle(.white.opacity(pageIndex > 0 ? 0.36 : 0.14))
+                .frame(width: 38, height: 38)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(AfterimagePressButtonStyle())
+        .disabled(pageIndex == 0)
+        .accessibilityLabel(pageIndex == 0 ? "Contact sheet, current" : "Contact sheet")
     }
 
     private var shareIconButton: some View {
@@ -249,6 +272,33 @@ struct RevealView: View {
                 .padding(.bottom, 12)
         }
         .onTapGesture { viewModel.statusMessage = nil }
+        .task(id: message) {
+            try? await Task.sleep(for: .milliseconds(1800))
+            guard viewModel.statusMessage == message else { return }
+            withAnimation(AfterimageMotion.quick) {
+                viewModel.statusMessage = nil
+            }
+        }
+    }
+
+    private func savedOverlay(_ message: String) -> some View {
+        VStack {
+            Spacer()
+            Text(message)
+                .font(AfterimageType.body)
+                .foregroundStyle(.white.opacity(0.86))
+                .padding(.horizontal, 18)
+                .padding(.vertical, 11)
+                .background(.white.opacity(0.1), in: Capsule())
+                .padding(.bottom, 70)
+        }
+        .allowsHitTesting(false)
+        .task(id: message) {
+            try? await Task.sleep(for: .milliseconds(1800))
+            withAnimation(AfterimageMotion.quick) {
+                viewModel.clearSavedOverlayMessage(message)
+            }
+        }
     }
 
     private func prepareCurrentShare() {

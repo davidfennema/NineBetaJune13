@@ -186,6 +186,8 @@ actor RollStore {
             safePhase = .complete
         } else if first.count < Roll.frameCount {
             safePhase = .firstPass
+        } else if manifest.phase == .awaitingSecondPass, second.isEmpty {
+            safePhase = .awaitingSecondPass
         } else if second.count < Roll.frameCount {
             safePhase = .secondPass
         } else {

@@ -1,4 +1,5 @@
 import AVFoundation
+import CoreImage
 import UIKit
 
 enum NineCameraPosition: String, CaseIterable {
@@ -22,8 +23,6 @@ enum NineCameraPosition: String, CaseIterable {
 
 @MainActor
 final class CameraManager: NSObject, ObservableObject {
-    private static let preferredCameraPositionKey = "nine.preferredCameraPosition"
-
     @Published private(set) var authorizationDenied = false
     @Published private(set) var isReady = false
     @Published var exposureBias: Float = 0
@@ -32,10 +31,11 @@ final class CameraManager: NSObject, ObservableObject {
     @Published private(set) var isHoldFocusLocked = false
     @Published private(set) var isManualFocusActive = false
     @Published private(set) var cameraPosition: NineCameraPosition
+    @Published private(set) var previewCameraPosition: NineCameraPosition
     @Published private(set) var canSwitchCamera = false
 
     var isPreviewMirrored: Bool {
-        cameraPosition == .front
+        previewCameraPosition == .front
     }
 
     // AVFoundation session work is serialized on sessionQueue, outside UI isolation.
@@ -51,10 +51,9 @@ final class CameraManager: NSObject, ObservableObject {
     private var focusRestoreTask: Task<Void, Never>?
     private var focusLockToken: UUID?
 
-    override init() {
-        let storedPosition = UserDefaults.standard.string(forKey: Self.preferredCameraPositionKey)
-            .flatMap(NineCameraPosition.init(rawValue:))
-        cameraPosition = storedPosition ?? .back
+    init(initialPosition: NineCameraPosition = .back) {
+        cameraPosition = initialPosition
+        previewCameraPosition = initialPosition
         super.init()
     }
 
@@ -93,14 +92,7 @@ final class CameraManager: NSObject, ObservableObject {
             let settings = AVCapturePhotoSettings()
             settings.photoQualityPrioritization = .speed
             settings.flashMode = .off
-            if let connection = output.connection(with: .video),
-               connection.isVideoMirroringSupported {
-                // Keep front-camera captures mirrored because the front preview is mirrored.
-                // This preserves the user's composition across preview, captured frames,
-                // blend preview, contact sheet, and exported images.
-                connection.automaticallyAdjustsVideoMirroring = false
-                connection.isVideoMirrored = cameraPosition == .front
-            }
+            configurePhotoConnection(for: cameraPosition)
             output.capturePhoto(with: settings, delegate: self)
         }
     }
@@ -115,6 +107,7 @@ final class CameraManager: NSObject, ObservableObject {
         }
 
         isReady = false
+        previewCameraPosition = nextPosition
         cancelHoldFocusLock()
         sessionQueue.async { [weak self] in
             guard let self else { return }
@@ -122,13 +115,13 @@ final class CameraManager: NSObject, ObservableObject {
                 try self.configureInput(position: nextPosition)
                 Task { @MainActor in
                     self.cameraPosition = nextPosition
-                    self.persistPreferredCameraPosition(nextPosition)
                     self.resetPublishedCameraControls()
                     self.isReady = true
                     print("[Nine] Camera switched · current: \(nextPosition.rawValue)")
                 }
             } catch {
                 Task { @MainActor in
+                    self.previewCameraPosition = self.cameraPosition
                     self.isReady = true
                     print("[Nine] Camera switch failed · \(error.localizedDescription)")
                 }
@@ -291,6 +284,7 @@ final class CameraManager: NSObject, ObservableObject {
                     Task { @MainActor in
                         self.canSwitchCamera = canSwitch
                         self.cameraPosition = selectedPosition
+                        self.previewCameraPosition = selectedPosition
                         self.resetPublishedCameraControls()
                         continuation.resume(returning: ())
                     }
@@ -376,9 +370,21 @@ final class CameraManager: NSObject, ObservableObject {
         currentInput = input
         device = camera
 
-        if let connection = output.connection(with: .video),
-           connection.isVideoRotationAngleSupported(90) {
-            connection.videoRotationAngle = 90
+        configurePhotoConnection(for: position)
+    }
+
+    private nonisolated func configurePhotoConnection(for position: NineCameraPosition) {
+        guard let connection = output.connection(with: .video) else { return }
+
+        // Keep capture orientation explicit and shared for both initial camera setup and
+        // camera switches. Front captures are mirrored to match Nine's mirrored preview;
+        // rear captures are never mirrored.
+        if connection.isVideoOrientationSupported {
+            connection.videoOrientation = .portrait
+        }
+        if connection.isVideoMirroringSupported {
+            connection.automaticallyAdjustsVideoMirroring = false
+            connection.isVideoMirrored = position == .front
         }
     }
 
@@ -437,10 +443,6 @@ final class CameraManager: NSObject, ObservableObject {
         isHoldFocusLocked = false
     }
 
-    private func persistPreferredCameraPosition(_ position: NineCameraPosition) {
-        UserDefaults.standard.set(position.rawValue, forKey: Self.preferredCameraPositionKey)
-    }
-
     private func resetPublishedCameraControls() {
         exposureBias = 0
         manualLensPosition = device?.lensPosition ?? 0.5
@@ -463,8 +465,7 @@ extension CameraManager: AVCapturePhotoCaptureDelegate {
             }
 
             guard let data = photo.fileDataRepresentation(),
-                  let image = UIImage(data: data),
-                  let squareImage = image.centerSquareCropped() else {
+                  let squareImage = UIImage.normalizedSquareCapture(from: data) else {
                 continuation?.resume(throwing: CameraError.captureFailed)
                 continuation = nil
                 return
@@ -476,6 +477,48 @@ extension CameraManager: AVCapturePhotoCaptureDelegate {
 }
 
 private extension UIImage {
+    static func normalizedSquareCapture(from data: Data) -> UIImage? {
+        guard let image = UIImage(data: data) else { return nil }
+        return image.normalizedUpright().centerSquareCropped()
+    }
+
+    func normalizedUpright() -> UIImage {
+        guard let cgImage else { return self }
+
+        let input = CIImage(cgImage: cgImage)
+            .oriented(cgImagePropertyOrientation)
+        let extent = input.extent.integral
+        let context = CIContext(options: [.cacheIntermediates: false])
+
+        guard let output = context.createCGImage(input, from: extent) else {
+            return self
+        }
+        return UIImage(cgImage: output, scale: 1, orientation: .up)
+    }
+
+    private var cgImagePropertyOrientation: CGImagePropertyOrientation {
+        switch imageOrientation {
+        case .up:
+            return .up
+        case .upMirrored:
+            return .upMirrored
+        case .down:
+            return .down
+        case .downMirrored:
+            return .downMirrored
+        case .left:
+            return .left
+        case .leftMirrored:
+            return .leftMirrored
+        case .right:
+            return .right
+        case .rightMirrored:
+            return .rightMirrored
+        @unknown default:
+            return .up
+        }
+    }
+
     func centerSquareCropped() -> UIImage? {
         let side = min(size.width, size.height)
         guard side > 0 else { return nil }

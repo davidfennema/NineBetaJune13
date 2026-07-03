@@ -10,13 +10,13 @@ struct PreviewView: UIViewRepresentable {
         let view = CameraPreviewUIView()
         view.previewLayer.session = session
         view.previewLayer.videoGravity = .resizeAspectFill
-        view.setMirroring(isMirrored)
+        view.updateOrientationAndMirroring(isMirrored: isMirrored)
         return view
     }
 
     func updateUIView(_ uiView: CameraPreviewUIView, context: Context) {
         uiView.previewLayer.session = session
-        uiView.setMirroring(isMirrored)
+        uiView.updateOrientationAndMirroring(isMirrored: isMirrored)
     }
 }
 
@@ -29,10 +29,15 @@ final class CameraPreviewUIView: UIView {
         layer as! AVCaptureVideoPreviewLayer
     }
 
-    func setMirroring(_ isMirrored: Bool) {
-        guard let connection = previewLayer.connection,
-              connection.isVideoMirroringSupported else { return }
-        connection.automaticallyAdjustsVideoMirroring = false
-        connection.isVideoMirrored = isMirrored
+    func updateOrientationAndMirroring(isMirrored: Bool) {
+        guard let connection = previewLayer.connection else { return }
+
+        if connection.isVideoOrientationSupported {
+            connection.videoOrientation = .portrait
+        }
+        if connection.isVideoMirroringSupported {
+            connection.automaticallyAdjustsVideoMirroring = false
+            connection.isVideoMirrored = isMirrored
+        }
     }
 }

@@ -4,7 +4,7 @@ import UIKit
 struct CameraView: View {
     @ObservedObject var viewModel: RollViewModel
     var onReturnHome: (() -> Void)?
-    @StateObject private var camera = CameraManager()
+    @StateObject private var camera: CameraManager
     @Environment(\.scenePhase) private var scenePhase
 
     @State private var isCapturing = false
@@ -22,8 +22,19 @@ struct CameraView: View {
     @State private var contextualHint: String?
     @State private var hintTask: Task<Void, Never>?
     @State private var showsCameraHelp = false
+    @State private var showsFirstPassDecision = false
     @AppStorage("afterimage.didShowFocusLockHint") private var didShowFocusLockHint = false
     @AppStorage("afterimage.didShowPinchHint") private var didShowPinchHint = false
+
+    init(viewModel: RollViewModel, onReturnHome: (() -> Void)? = nil) {
+        self.viewModel = viewModel
+        self.onReturnHome = onReturnHome
+        _camera = StateObject(
+            wrappedValue: CameraManager(
+                initialPosition: Self.initialCameraPosition(for: viewModel.activeRoll)
+            )
+        )
+    }
 
     private var roll: Roll? { viewModel.activeRoll }
     private var previewSaturation: Double {
@@ -125,6 +136,11 @@ struct CameraView: View {
             NineInfoNoteView(
                 text: "Pinch to zoom.\n\nSwipe to adjust exposure.\n\nLong-tap for AF lock."
             )
+                .presentationDetents([.medium])
+                .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $showsFirstPassDecision) {
+            firstPassDecisionSheet
                 .presentationDetents([.medium])
                 .presentationDragIndicator(.visible)
         }
@@ -479,6 +495,7 @@ struct CameraView: View {
 
     private func exposeFrame() {
         guard !isCapturing else { return }
+        guard viewModel.activeRoll?.requiresCaptureInput == true else { return }
         isCapturing = true
         triggerShutterFeedback()
         blinkShutter()
@@ -492,7 +509,7 @@ struct CameraView: View {
                 camera.resetFocusLockAfterCapture()
 
                 if milestone == .firstPassComplete {
-                    await showSecondPassTransition()
+                    showsFirstPassDecision = true
                 }
             } catch {
                 camera.resetFocusLockAfterCapture()
@@ -500,6 +517,66 @@ struct CameraView: View {
                 viewModel.statusMessage = error.localizedDescription
             }
             isCapturing = false
+        }
+    }
+
+    private var firstPassDecisionSheet: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+
+            VStack(spacing: 22) {
+                VStack(spacing: 10) {
+                    Text("First Pass Complete.")
+                        .font(.system(size: 18, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.88))
+
+                    Text("Save for later?\n\nYou can keep up to 3 unfinished rolls.")
+                        .font(AfterimageType.body)
+                        .multilineTextAlignment(.center)
+                        .foregroundStyle(.white.opacity(0.58))
+                        .lineSpacing(3)
+                }
+
+                VStack(spacing: 12) {
+                    Button {
+                        Task {
+                            if await viewModel.saveFirstPassForLater() {
+                                showsFirstPassDecision = false
+                                onReturnHome?()
+                            }
+                        }
+                    } label: {
+                        Text("Save First Pass")
+                            .font(AfterimageType.primaryAction)
+                            .foregroundStyle(.white.opacity(viewModel.canSaveFirstPassForLater ? 0.78 : 0.38))
+                            .frame(maxWidth: .infinity, minHeight: 48)
+                            .background(.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                    .stroke(.white.opacity(0.11), lineWidth: 1)
+                            }
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(!viewModel.canSaveFirstPassForLater)
+
+                    Button {
+                        showsFirstPassDecision = false
+                        Task {
+                            await viewModel.beginSecondPassForActiveRoll()
+                            await showSecondPassTransition()
+                        }
+                    } label: {
+                        Text("Begin Second Pass")
+                            .font(AfterimageType.primaryAction)
+                            .foregroundStyle(.black.opacity(0.92))
+                            .frame(maxWidth: .infinity, minHeight: 48)
+                            .background(.white.opacity(0.92), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 24)
+            .padding(.vertical, 30)
         }
     }
 
@@ -557,6 +634,16 @@ struct CameraView: View {
             x: camera.isPreviewMirrored ? 1 - normalizedX : normalizedX,
             y: normalizedY
         )
+    }
+
+    private static func initialCameraPosition(for roll: Roll?) -> NineCameraPosition {
+        guard let roll else { return .back }
+        let latestFrame = roll.secondPassImages.last ?? roll.firstPassImages.last
+        guard let rawPosition = latestFrame?.metadata?["cameraPosition"],
+              let position = NineCameraPosition(rawValue: rawPosition) else {
+            return .back
+        }
+        return position
     }
 }
 

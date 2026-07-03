@@ -4,6 +4,7 @@ struct HomeView: View {
     @ObservedObject var viewModel: RollViewModel
     var onContinueRoll: (() -> Void)?
     var onStartRoll: ((RollMode, Bool) async -> Void)?
+    var onOpenSavedRoll: ((Roll) async -> Void)?
     var onOpenRoll: ((Roll) -> Void)?
     @State private var selectedMode: RollMode = .freeform
     @State private var replacementMode: RollMode = .freeform
@@ -35,6 +36,10 @@ struct HomeView: View {
                         startNewRollButton
                     } else {
                         createSection
+                    }
+
+                    if !viewModel.savedFirstPassRolls.isEmpty {
+                        savedRollsList
                     }
 
                     if !viewModel.storedRolls.isEmpty {
@@ -203,6 +208,47 @@ struct HomeView: View {
             ?? viewModel.resumeState?.mode
     }
 
+    private var savedRollsList: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Saved Rolls")
+                .font(AfterimageType.metadata)
+                .tracking(1.2)
+                .foregroundStyle(.white.opacity(0.55))
+
+            List {
+                ForEach(viewModel.savedFirstPassRolls) { roll in
+                    Button {
+                        guard !showsStartOverConfirmation else { return }
+                        Task {
+                            await onOpenSavedRoll?(roll)
+                        }
+                    } label: {
+                        SavedFirstPassRollRow(roll: roll)
+                    }
+                    .buttonStyle(.plain)
+                    .contentShape(Rectangle())
+                    .listRowInsets(EdgeInsets(top: 5, leading: 0, bottom: 5, trailing: 0))
+                    .listRowSeparator(.hidden)
+                    .listRowBackground(Color.clear)
+                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                        Button(role: .destructive) {
+                            withAnimation(AfterimageMotion.standard) {
+                                viewModel.deleteSavedFirstPassRoll(roll)
+                            }
+                        } label: {
+                            Label("Delete", systemImage: "trash")
+                        }
+                    }
+                }
+            }
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
+            .scrollDisabled(true)
+            .frame(height: CGFloat(viewModel.savedFirstPassRolls.count) * 86)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
     private var archiveList: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Completed Rolls")
@@ -244,6 +290,62 @@ struct HomeView: View {
             .frame(height: CGFloat(viewModel.storedRolls.count) * 86)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private struct SavedFirstPassRollRow: View {
+    let roll: Roll
+
+    var body: some View {
+        HStack(spacing: 12) {
+            firstPassPreview
+
+            VStack(alignment: .leading, spacing: 5) {
+                Text(roll.title)
+                    .font(AfterimageType.archiveTitle)
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+
+                Text("Ready for second pass")
+                    .font(AfterimageType.body)
+                    .foregroundStyle(.white.opacity(0.5))
+
+                Text(roll.mode.title)
+                    .font(AfterimageType.caption)
+                    .tracking(0.8)
+                    .foregroundStyle(.white.opacity(0.38))
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, minHeight: 76, alignment: .leading)
+        .background(.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .contentShape(Rectangle())
+    }
+
+    private var firstPassPreview: some View {
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 2), count: 3), spacing: 2) {
+            ForEach(0..<Roll.frameCount, id: \.self) { index in
+                if let image = roll.firstPassImages[safe: index]?.image {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                        .clipped()
+                } else {
+                    Rectangle()
+                        .fill(.white.opacity(0.08))
+                }
+            }
+        }
+        .padding(3)
+        .frame(width: 56, height: 56)
+        .background(.white.opacity(0.035))
+        .overlay {
+            Rectangle()
+                .stroke(.white.opacity(0.1), lineWidth: 1)
+        }
+        .clipped()
     }
 }
 
@@ -352,5 +454,11 @@ private struct MiniContactSheetPlaceholder: View {
             Rectangle()
                 .stroke(.white.opacity(0.1), lineWidth: 1)
         }
+    }
+}
+
+private extension Array {
+    subscript(safe index: Index) -> Element? {
+        indices.contains(index) ? self[index] : nil
     }
 }

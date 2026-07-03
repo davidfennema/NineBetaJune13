@@ -12,11 +12,15 @@ final class BlendEngine {
         }
 
         return try zip(roll.firstPassImages, roll.secondPassImages).enumerated().map { index, pair in
-            let orientationOptions: [CIImageOption: Any] = [.applyOrientationProperty: true]
-            guard let first = CIImage(data: pair.0.imageData, options: orientationOptions),
-                  let second = CIImage(data: pair.1.imageData, options: orientationOptions) else {
+            guard let firstImage = UIImage(data: pair.0.imageData)?.normalizedUp(),
+                  let secondImage = UIImage(data: pair.1.imageData)?.normalizedUp(),
+                  let firstCGImage = firstImage.cgImage,
+                  let secondCGImage = secondImage.cgImage else {
                 throw RollError.imageEncodingFailed
             }
+            let first = CIImage(cgImage: firstCGImage)
+            let second = CIImage(cgImage: secondCGImage)
+
             return try render(
                 first: squareCrop(first),
                 second: squareCrop(second),
@@ -170,5 +174,19 @@ final class BlendEngine {
             (0.008, 0.01, CGSize(width: 0.004, height: -0.003))
         ]
         return values[index % values.count]
+    }
+}
+
+private extension UIImage {
+    func normalizedUp() -> UIImage {
+        guard imageOrientation != .up else { return self }
+
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = scale
+        format.opaque = false
+
+        return UIGraphicsImageRenderer(size: size, format: format).image { _ in
+            draw(in: CGRect(origin: .zero, size: size))
+        }
     }
 }

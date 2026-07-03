@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct IntroView: View {
     var buttonTitle = "Let's Go"
@@ -29,17 +30,29 @@ struct IntroView: View {
                         .frame(height: geometry.size.height * 0.66)
                         .clipped()
                         .overlay(alignment: .bottom) {
-                            LinearGradient(
-                                colors: [
-                                    .black.opacity(0),
-                                    .black.opacity(0.72),
-                                    .black
-                                ],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                            .frame(height: 180)
-                            .allowsHitTesting(false)
+                            ZStack(alignment: .bottom) {
+                                LinearGradient(
+                                    colors: [
+                                        .black.opacity(0),
+                                        .black.opacity(0.72),
+                                        .black
+                                    ],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                                .frame(height: 180)
+                                .allowsHitTesting(false)
+
+                                if sampleImages.count > 1 {
+                                    IntroPageControl(
+                                        numberOfPages: sampleImages.count,
+                                        currentPage: selectedSampleIndex
+                                    )
+                                    .frame(height: 18)
+                                    .padding(.bottom, 34)
+                                    .allowsHitTesting(false)
+                                }
+                            }
                         }
 
                     Spacer(minLength: 0)
@@ -126,6 +139,24 @@ private struct IntroHeroCarousel: View {
             }
         }
         .tabViewStyle(.page(indexDisplayMode: .never))
+    }
+}
+
+private struct IntroPageControl: UIViewRepresentable {
+    let numberOfPages: Int
+    let currentPage: Int
+
+    func makeUIView(context: Context) -> UIPageControl {
+        let control = UIPageControl()
+        control.isUserInteractionEnabled = false
+        control.currentPageIndicatorTintColor = UIColor.white.withAlphaComponent(0.72)
+        control.pageIndicatorTintColor = UIColor.white.withAlphaComponent(0.28)
+        return control
+    }
+
+    func updateUIView(_ uiView: UIPageControl, context: Context) {
+        uiView.numberOfPages = numberOfPages
+        uiView.currentPage = currentPage
     }
 }
 

@@ -54,6 +54,7 @@ struct RootView: View {
                             viewModel: viewModel,
                             onContinueRoll: showCamera,
                             onStartRoll: startRoll,
+                            onOpenSavedRoll: openSavedRoll,
                             onOpenRoll: openStoredRoll
                         )
                     }
@@ -65,6 +66,7 @@ struct RootView: View {
                             viewModel: viewModel,
                             onContinueRoll: showCamera,
                             onStartRoll: startRoll,
+                            onOpenSavedRoll: openSavedRoll,
                             onOpenRoll: openStoredRoll
                         )
                     }
@@ -106,6 +108,7 @@ struct RootView: View {
                 viewModel: viewModel,
                 onContinueRoll: showCamera,
                 onStartRoll: startRoll,
+                onOpenSavedRoll: openSavedRoll,
                 onOpenRoll: openStoredRoll
             )
             .offset(x: homeOffset(width: width))
@@ -150,9 +153,18 @@ struct RootView: View {
                         viewModel: viewModel,
                         onContinueRoll: showCamera,
                         onStartRoll: startRoll,
+                        onOpenSavedRoll: openSavedRoll,
                         onOpenRoll: openStoredRoll
                     )
                 }
+            case .awaitingSecondPass:
+                HomeView(
+                    viewModel: viewModel,
+                    onContinueRoll: showCamera,
+                    onStartRoll: startRoll,
+                    onOpenSavedRoll: openSavedRoll,
+                    onOpenRoll: openStoredRoll
+                )
             case .developing:
                 DevelopingView()
             case .complete:
@@ -163,6 +175,7 @@ struct RootView: View {
                 viewModel: viewModel,
                 onContinueRoll: showCamera,
                 onStartRoll: startRoll,
+                onOpenSavedRoll: openSavedRoll,
                 onOpenRoll: openStoredRoll
             )
         }
@@ -211,6 +224,11 @@ struct RootView: View {
         withAnimation(routeAnimation) {
             launchDestination = .reveal(roll)
         }
+    }
+
+    private func openSavedRoll(_ roll: Roll) async {
+        await viewModel.resumeSavedFirstPass(roll)
+        showCamera()
     }
 
     private func completeIntro() {
