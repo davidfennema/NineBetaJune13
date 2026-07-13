@@ -19,11 +19,10 @@ struct HomeView: View {
             Color.black.ignoresSafeArea()
 
             ScrollView(showsIndicators: false) {
-                VStack(spacing: 22) {
+                VStack(spacing: AfterimageSpacing.large) {
                     NineBrandMark()
                         .frame(width: 188, height: 188)
-                        .padding(.top, 68)
-                        .padding(.bottom, 12)
+                        .padding(.top, AfterimageSpacing.extraLarge * 2)
                         .contentShape(Rectangle())
                         .onTapGesture {
                             showsAbout = true
@@ -50,14 +49,42 @@ struct HomeView: View {
                         Text(statusMessage)
                             .font(AfterimageType.body)
                             .multilineTextAlignment(.center)
-                            .foregroundStyle(.white.opacity(0.55))
-                            .padding(.horizontal, 24)
+                            .foregroundStyle(.white.opacity(AfterimageOpacity.dimmed))
+                            .padding(.horizontal, AfterimageLayout.horizontalScreenMargin)
                     }
 
                     Spacer(minLength: 60)
                 }
-                .padding(.horizontal, 24)
+                .padding(.horizontal, AfterimageLayout.horizontalScreenMargin)
                 .frame(maxWidth: .infinity)
+            }
+
+            if showsStartOverConfirmation {
+                ZStack {
+                    Color.black
+                        .opacity(AfterimageOpacity.dialogScrim)
+                        .ignoresSafeArea()
+                        .contentShape(Rectangle())
+
+                    startOverConfirmationDialog
+                        .padding(.horizontal, AfterimageLayout.horizontalScreenMargin)
+                }
+                .transition(AfterimageMotion.screenTransition)
+                .zIndex(2)
+            }
+
+            if showsReplacementStylePicker {
+                ZStack {
+                    Color.black
+                        .opacity(AfterimageOpacity.dialogScrim)
+                        .ignoresSafeArea()
+                        .contentShape(Rectangle())
+
+                    replacementStyleDialog
+                        .padding(.horizontal, AfterimageLayout.horizontalScreenMargin)
+                }
+                .transition(AfterimageMotion.screenTransition)
+                .zIndex(3)
             }
         }
         .onAppear {
@@ -68,106 +95,95 @@ struct HomeView: View {
                 showsAbout = false
             }
         }
-        .sheet(isPresented: $showsReplacementStylePicker) {
-            replacementStyleSheet
-                .presentationDetents([.medium])
-                .presentationDragIndicator(.visible)
-        }
-        .alert("Start New Roll?", isPresented: $showsStartOverConfirmation) {
-            Button("Cancel", role: .cancel) { }
-            Button("Start Over", role: .destructive) {
-                replacementMode = activeRollMode ?? selectedMode
-                showsReplacementStylePicker = true
-            }
-        } message: {
-            Text("Your current roll is not complete.\n\nStarting a new roll will discard it.")
-        }
     }
 
     private var createSection: some View {
-        VStack(spacing: 14) {
+        VStack(spacing: AfterimageSpacing.large) {
             modeSelection
             startNewRollButton
         }
+        .padding(.top, AfterimageLayout.decisionGroupOpticalOffset)
     }
 
     private var resumeSection: some View {
-        VStack(spacing: 12) {
-            Button {
+        VStack(spacing: AfterimageSpacing.medium) {
+            AfterimageSecondaryButton(title: "Continue Roll") {
                 onContinueRoll?()
-            } label: {
-                Text("Continue Roll")
-                    .font(AfterimageType.primaryAction)
-                .foregroundStyle(.white.opacity(0.84))
-                .frame(maxWidth: .infinity, minHeight: 48)
-                .background(.white.opacity(0.075), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .stroke(.white.opacity(0.13), lineWidth: 1)
-                }
             }
-            .buttonStyle(.plain)
         }
     }
 
     private var startNewRollButton: some View {
-        VStack(spacing: 12) {
-            Button {
-                if viewModel.hasInProgressRoll {
-                    showsStartOverConfirmation = true
-                } else {
+        VStack(spacing: AfterimageSpacing.medium) {
+            if viewModel.hasInProgressRoll {
+                AfterimageSecondaryButton(title: "Start New Roll") {
+                    withAnimation(AfterimageMotion.standard) {
+                        showsStartOverConfirmation = true
+                    }
+                }
+            } else {
+                AfterimagePrimaryButton(title: "Start New Roll") {
                     Task {
                         await onStartRoll?(selectedMode, false)
                     }
                 }
-            } label: {
-                Text("Start New Roll")
-                    .font(AfterimageType.primaryAction)
-                    .foregroundStyle(viewModel.hasInProgressRoll ? .white.opacity(0.76) : .black.opacity(0.92))
-                    .frame(maxWidth: .infinity, minHeight: 46)
-                    .background(
-                        viewModel.hasInProgressRoll ? .white.opacity(0.065) : .white.opacity(0.92),
-                        in: RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    )
-                    .overlay {
-                        if viewModel.hasInProgressRoll {
-                            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                .stroke(.white.opacity(0.12), lineWidth: 1)
-                        }
-                    }
             }
-            .buttonStyle(.plain)
         }
     }
 
-    private var replacementStyleSheet: some View {
-        ZStack {
-            Color.black.ignoresSafeArea()
+    private var startOverConfirmationDialog: some View {
+        AfterimageDialogSurface {
+            VStack(spacing: AfterimageSpacing.large) {
+                VStack(spacing: AfterimageSpacing.medium) {
+                    Text("Discard unfinished first pass?")
+                        .font(AfterimageType.rollTitle)
+                        .foregroundStyle(.white.opacity(0.88))
 
-            VStack(spacing: 24) {
+                    Text("This roll hasn't completed its first pass yet, so it can't be saved for later.")
+                        .font(AfterimageType.body)
+                        .multilineTextAlignment(.center)
+                        .foregroundStyle(.white.opacity(0.58))
+                        .lineSpacing(3)
+                }
+
+                VStack(spacing: AfterimageSpacing.medium) {
+                    AfterimageSecondaryButton(title: "Cancel") {
+                        withAnimation(AfterimageMotion.standard) {
+                            showsStartOverConfirmation = false
+                        }
+                    }
+
+                    AfterimagePrimaryButton(title: "Discard Roll and Start Over") {
+                        replacementMode = activeRollMode ?? selectedMode
+                        withAnimation(AfterimageMotion.standard) {
+                            showsStartOverConfirmation = false
+                            showsReplacementStylePicker = true
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private var replacementStyleDialog: some View {
+        AfterimageDialogSurface {
+            VStack(spacing: AfterimageSpacing.large) {
                 Text("Choose Style")
-                    .font(.system(size: 18, weight: .medium))
+                    .font(AfterimageType.rollTitle)
                     .foregroundStyle(.white.opacity(0.86))
 
                 replacementModeSelection
 
-                Button {
+                AfterimagePrimaryButton(title: "Begin Roll") {
                     selectedMode = replacementMode
-                    showsReplacementStylePicker = false
+                    withAnimation(AfterimageMotion.standard) {
+                        showsReplacementStylePicker = false
+                    }
                     Task {
                         await onStartRoll?(replacementMode, true)
                     }
-                } label: {
-                    Text("Begin Roll")
-                        .font(AfterimageType.primaryAction)
-                        .foregroundStyle(.black.opacity(0.92))
-                        .frame(maxWidth: .infinity, minHeight: 48)
-                        .background(.white.opacity(0.92), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                 }
-                .buttonStyle(.plain)
             }
-            .padding(.horizontal, 24)
-            .padding(.vertical, 28)
         }
     }
 
@@ -180,11 +196,11 @@ struct HomeView: View {
     }
 
     private func modeSelection(selectedMode: Binding<RollMode>) -> some View {
-        VStack(alignment: .center, spacing: 10) {
+        VStack(alignment: .center, spacing: AfterimageSpacing.small) {
             LazyVGrid(
-                columns: Array(repeating: GridItem(.fixed(118), spacing: 18, alignment: .center), count: 2),
+                columns: Array(repeating: GridItem(.fixed(118), spacing: AfterimageSpacing.large, alignment: .center), count: 2),
                 alignment: .center,
-                spacing: 16
+                spacing: AfterimageSpacing.medium
             ) {
                 ForEach(RollMode.allCases) { mode in
                     Button {
@@ -213,7 +229,7 @@ struct HomeView: View {
             Text("Saved Rolls")
                 .font(AfterimageType.metadata)
                 .tracking(1.2)
-                .foregroundStyle(.white.opacity(0.55))
+                .foregroundStyle(.white.opacity(AfterimageOpacity.dimmed))
 
             List {
                 ForEach(viewModel.savedFirstPassRolls) { roll in
@@ -254,7 +270,7 @@ struct HomeView: View {
             Text("Completed Rolls")
                 .font(AfterimageType.metadata)
                 .tracking(1.2)
-                .foregroundStyle(.white.opacity(0.55))
+                .foregroundStyle(.white.opacity(AfterimageOpacity.dimmed))
 
             List {
                 ForEach(viewModel.storedRolls) { roll in
@@ -306,28 +322,41 @@ private struct SavedFirstPassRollRow: View {
                     .foregroundStyle(.white)
                     .lineLimit(1)
 
-                Text("Ready for second pass")
-                    .font(AfterimageType.body)
-                    .foregroundStyle(.white.opacity(0.5))
+                Text(savedRollStatus)
+                    .font(AfterimageType.rollListStatus)
+                    .foregroundStyle(.white.opacity(0.48))
 
                 Text(roll.mode.title)
-                    .font(AfterimageType.caption)
-                    .tracking(0.8)
-                    .foregroundStyle(.white.opacity(0.38))
+                    .font(AfterimageType.rollListStyle)
+                    .tracking(1.0)
+                    .foregroundStyle(.white.opacity(0.34))
             }
 
             Spacer(minLength: 0)
         }
         .padding(10)
         .frame(maxWidth: .infinity, minHeight: 76, alignment: .leading)
-        .background(.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .afterimageCardSurface()
         .contentShape(Rectangle())
+    }
+
+    private var savedRollStatus: String {
+        guard roll.phase == .secondPass else {
+            return "Ready for second pass"
+        }
+        return "Second pass \(roll.secondPassImages.count)/\(Roll.frameCount)"
     }
 
     private var firstPassPreview: some View {
         LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 2), count: 3), spacing: 2) {
             ForEach(0..<Roll.frameCount, id: \.self) { index in
-                if let image = roll.firstPassImages[safe: index]?.image {
+                if let frame = roll.firstPassImages[safe: index],
+                   let image = FirstPassThumbnailRenderer.thumbnail(
+                    for: frame,
+                    rollID: roll.id,
+                    mode: roll.mode,
+                    side: 56
+                   ) {
                     Image(uiImage: image)
                         .resizable()
                         .scaledToFill()
@@ -404,20 +433,20 @@ private struct ArchiveRollRow: View {
                     .lineLimit(1)
 
                 Text(roll.createdAt.formatted(date: .abbreviated, time: .shortened))
-                    .font(AfterimageType.body)
-                    .foregroundStyle(.white.opacity(0.5))
+                    .font(AfterimageType.rollListStatus)
+                    .foregroundStyle(.white.opacity(0.48))
 
                 Text(roll.mode.title)
-                    .font(AfterimageType.caption)
-                    .tracking(0.8)
-                    .foregroundStyle(.white.opacity(0.38))
+                    .font(AfterimageType.rollListStyle)
+                    .tracking(1.0)
+                    .foregroundStyle(.white.opacity(0.34))
             }
 
             Spacer(minLength: 0)
         }
         .padding(10)
         .frame(maxWidth: .infinity, minHeight: 76, alignment: .leading)
-        .background(.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .afterimageCardSurface()
         .contentShape(Rectangle())
     }
 

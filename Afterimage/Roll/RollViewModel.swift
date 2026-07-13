@@ -33,10 +33,11 @@ final class RollViewModel: ObservableObject {
                 .filter { $0.phase == .complete }
                 .map(archiveReady)
             savedFirstPassRolls = result.rolls
-                .filter { $0.phase == .awaitingSecondPass }
+                .filter(\.isSavedFirstPassRoll)
+                .filter { $0.phase == .awaitingSecondPass || $0.phase == .secondPass }
                 .sorted { $0.updatedAt > $1.updatedAt }
             resumableRoll = result.rolls
-                .filter(\.requiresCaptureInput)
+                .filter { $0.requiresCaptureInput && !$0.isSavedFirstPassRoll }
                 .sorted { $0.updatedAt > $1.updatedAt }
                 .first
             resumeState = resumableRoll.map(RollResumeState.init)
@@ -75,7 +76,7 @@ final class RollViewModel: ObservableObject {
     }
 
     var hasInProgressRoll: Bool {
-        activeRoll?.requiresCaptureInput == true
+        (activeRoll?.requiresCaptureInput == true && activeRoll?.isSavedFirstPassRoll != true)
             || resumableRoll?.requiresCaptureInput == true
             || resumeState != nil
     }
@@ -85,7 +86,12 @@ final class RollViewModel: ObservableObject {
     }
 
     func parkActiveRollForLibrary() {
-        if activeRollOpenedFromSavedRollWithoutSecondPassCapture {
+        if activeRollIsSavedLibraryRoll {
+            if var activeRoll {
+                activeRoll.touch()
+                upsertSavedFirstPassRoll(activeRoll)
+                enqueuePersistence(for: activeRoll)
+            }
             activeRoll = nil
             resumableRoll = nil
             resumeState = nil
@@ -134,7 +140,12 @@ final class RollViewModel: ObservableObject {
         do {
             try roll.beginSecondPass()
             activeRoll = roll
-            resumeState = RollResumeState(roll: roll)
+            if roll.isSavedFirstPassRoll {
+                upsertSavedFirstPassRoll(roll)
+                resumeState = nil
+            } else {
+                resumeState = RollResumeState(roll: roll)
+            }
             statusMessage = nil
             try await store.save(roll)
         } catch {
@@ -155,6 +166,7 @@ final class RollViewModel: ObservableObject {
             return false
         }
 
+        roll.isSavedFirstPassRoll = true
         roll.touch()
         do {
             try await store.save(roll)
@@ -174,18 +186,24 @@ final class RollViewModel: ObservableObject {
     func resumeSavedFirstPass(_ roll: Roll) async {
         do {
             let hydratedRoll = try await store.loadRoll(id: roll.id) ?? roll
-            guard hydratedRoll.phase == .awaitingSecondPass,
-                  hydratedRoll.firstPassImages.count == Roll.frameCount else {
+            guard (hydratedRoll.phase == .awaitingSecondPass || hydratedRoll.phase == .secondPass),
+                  hydratedRoll.isSavedFirstPassRoll,
+                  hydratedRoll.firstPassImages.count == Roll.frameCount,
+                  hydratedRoll.secondPassImages.count < Roll.frameCount else {
                 savedFirstPassRolls.removeAll { $0.id == roll.id }
                 statusMessage = "The saved roll could not be restored."
                 return
             }
 
             var secondPassRoll = hydratedRoll
-            try secondPassRoll.beginSecondPass()
+            if secondPassRoll.phase == .awaitingSecondPass {
+                try secondPassRoll.beginSecondPass()
+            }
             activeRoll = squareNormalized(secondPassRoll)
             resumableRoll = nil
             resumeState = nil
+            upsertSavedFirstPassRoll(secondPassRoll)
+            try await store.save(secondPassRoll)
             statusMessage = nil
         } catch {
             statusMessage = error.localizedDescription
@@ -357,7 +375,12 @@ final class RollViewModel: ObservableObject {
     }
 
     func returnHome() {
-        if activeRollOpenedFromSavedRollWithoutSecondPassCapture {
+        if activeRollIsSavedLibraryRoll {
+            if var activeRoll {
+                activeRoll.touch()
+                upsertSavedFirstPassRoll(activeRoll)
+                enqueuePersistence(for: activeRoll)
+            }
             activeRoll = nil
             resumableRoll = nil
             resumeState = nil
@@ -380,9 +403,6 @@ final class RollViewModel: ObservableObject {
 
     func recordCapture(_ image: UIImage, metadata: [String: String]? = nil) async throws -> CaptureMilestone {
         guard var roll = activeRoll else { throw RollError.captureUnavailable }
-        let startsSavedSecondPass = roll.phase == .secondPass
-            && roll.secondPassImages.isEmpty
-            && savedFirstPassRolls.contains(where: { $0.id == roll.id })
         guard let data = await encodedJPEGData(from: image) else {
             throw RollError.imageEncodingFailed
         }
@@ -390,10 +410,10 @@ final class RollViewModel: ObservableObject {
         let frame = CapturedFrame(imageData: data, metadata: metadata)
         let milestone = try roll.append(frame)
         activeRoll = roll
-        if startsSavedSecondPass, !roll.secondPassImages.isEmpty {
-            savedFirstPassRolls.removeAll { $0.id == roll.id }
+        if roll.isSavedFirstPassRoll, milestone != .secondPassComplete {
+            upsertSavedFirstPassRoll(roll)
         }
-        resumeState = roll.requiresCaptureInput ? RollResumeState(roll: roll) : nil
+        resumeState = roll.requiresCaptureInput && !roll.isSavedFirstPassRoll ? RollResumeState(roll: roll) : nil
         enqueuePersistence(for: roll)
 
         if milestone == .secondPassComplete {
@@ -422,20 +442,18 @@ final class RollViewModel: ObservableObject {
     }
 
     func persistActiveRoll() async {
-        if activeRollOpenedFromSavedRollWithoutSecondPassCapture {
-            activeRoll = nil
-            resumableRoll = nil
-            resumeState = nil
-            return
-        }
-
         guard var roll = activeRoll, roll.phase != .complete else { return }
         roll.touch()
         do {
             await flushPendingPersistence()
             try await store.save(roll)
             activeRoll = roll
-            resumeState = roll.requiresCaptureInput ? RollResumeState(roll: roll) : nil
+            if roll.isSavedFirstPassRoll, roll.phase == .awaitingSecondPass || roll.phase == .secondPass {
+                upsertSavedFirstPassRoll(roll)
+                resumeState = nil
+            } else {
+                resumeState = roll.requiresCaptureInput ? RollResumeState(roll: roll) : nil
+            }
         } catch {
             statusMessage = error.localizedDescription
         }
@@ -499,13 +517,16 @@ final class RollViewModel: ObservableObject {
         return squareRoll
     }
 
-    private var activeRollOpenedFromSavedRollWithoutSecondPassCapture: Bool {
-        guard let activeRoll,
-              activeRoll.phase == .secondPass,
-              activeRoll.secondPassImages.isEmpty else {
-            return false
-        }
-        return savedFirstPassRolls.contains { $0.id == activeRoll.id }
+    private var activeRollIsSavedLibraryRoll: Bool {
+        activeRoll?.isSavedFirstPassRoll == true
+            && activeRoll?.requiresCaptureInput == true
+    }
+
+    private func upsertSavedFirstPassRoll(_ roll: Roll) {
+        guard roll.isSavedFirstPassRoll,
+              roll.phase == .awaitingSecondPass || roll.phase == .secondPass else { return }
+        savedFirstPassRolls.removeAll { $0.id == roll.id }
+        savedFirstPassRolls.insert(roll, at: 0)
     }
 
     private func archiveReady(_ roll: Roll) -> Roll {

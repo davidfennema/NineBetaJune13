@@ -126,11 +126,16 @@ actor RollStore {
             firstPassFrames: first,
             secondPassFrames: second,
             blendedFramePaths: blendedPaths,
-            gridPath: gridPath
+            gridPath: gridPath,
+            isSavedFirstPassRoll: roll.isSavedFirstPassRoll
         )
         let data = try encoder.encode(manifest)
         try data.write(to: manifestURL(in: rollDirectory), options: .atomic)
-        ResumeRollCache.save(ResumeRollState(roll: roll))
+        if roll.isSavedFirstPassRoll {
+            ResumeRollCache.clear()
+        } else {
+            ResumeRollCache.save(ResumeRollState(roll: roll))
+        }
     }
 
     func loadRoll(id: UUID) throws -> Roll? {
@@ -208,7 +213,8 @@ actor RollStore {
             firstPassImages: first,
             secondPassImages: second,
             blendedImages: safePhase == .complete ? blended : [],
-            gridImage: gridImage
+            gridImage: gridImage,
+            isSavedFirstPassRoll: safePhase == .complete ? false : manifest.isSavedFirstPassRoll
         )
         let expectedFrameIndex = roll.capturedFrameCount
         let wasRepaired = manifest.phase != safePhase

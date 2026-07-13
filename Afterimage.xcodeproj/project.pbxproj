@@ -30,6 +30,7 @@
 		B10000000000000000000021 /* ViewfinderInfoOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000023 /* ViewfinderInfoOverlay.swift */; };
 		B10000000000000000000022 /* AfterimageDesignSystem.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000024 /* AfterimageDesignSystem.swift */; };
 		B10000000000000000000023 /* IntroView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000025 /* IntroView.swift */; };
+		B10000000000000000000024 /* FirstPassThumbnailRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000026 /* FirstPassThumbnailRenderer.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -58,6 +59,7 @@
 		A10000000000000000000023 /* ViewfinderInfoOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewfinderInfoOverlay.swift; sourceTree = "<group>"; };
 		A10000000000000000000024 /* AfterimageDesignSystem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AfterimageDesignSystem.swift; sourceTree = "<group>"; };
 		A10000000000000000000025 /* IntroView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IntroView.swift; sourceTree = "<group>"; };
+		A10000000000000000000026 /* FirstPassThumbnailRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FirstPassThumbnailRenderer.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -126,6 +128,7 @@
 			children = (
 				A10000000000000000000006 /* BlendEngine.swift */,
 				A10000000000000000000007 /* GridRenderer.swift */,
+				A10000000000000000000026 /* FirstPassThumbnailRenderer.swift */,
 				A10000000000000000000020 /* ShareRenderer.swift */,
 			);
 			path = Processing;
@@ -235,6 +238,7 @@
 				B10000000000000000000005 /* PreviewView.swift in Sources */,
 				B10000000000000000000006 /* BlendEngine.swift in Sources */,
 				B10000000000000000000007 /* GridRenderer.swift in Sources */,
+				B10000000000000000000024 /* FirstPassThumbnailRenderer.swift in Sources */,
 				B10000000000000000000018 /* ShareRenderer.swift in Sources */,
 				B10000000000000000000008 /* RollStore.swift in Sources */,
 				B10000000000000000000009 /* PhotoLibrarySaver.swift in Sources */,
@@ -292,7 +296,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 4;
 				DEVELOPMENT_TEAM = LH5L8WMW7Z;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Afterimage/Info.plist;
@@ -315,7 +319,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 4;
 				DEVELOPMENT_TEAM = LH5L8WMW7Z;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Afterimage/Info.plist;

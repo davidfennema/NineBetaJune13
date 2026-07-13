@@ -29,15 +29,20 @@ final class CameraPreviewUIView: UIView {
         layer as! AVCaptureVideoPreviewLayer
     }
 
+    private var lastMirroringState = false
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        updateOrientationAndMirroring(isMirrored: lastMirroringState)
+    }
+
     func updateOrientationAndMirroring(isMirrored: Bool) {
+        lastMirroringState = isMirrored
         guard let connection = previewLayer.connection else { return }
 
-        if connection.isVideoOrientationSupported {
-            connection.videoOrientation = .portrait
-        }
-        if connection.isVideoMirroringSupported {
-            connection.automaticallyAdjustsVideoMirroring = false
-            connection.isVideoMirrored = isMirrored
-        }
+        NineCameraConnectionConfiguration.apply(
+            to: connection,
+            position: isMirrored ? .front : .back
+        )
     }
 }

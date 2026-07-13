@@ -35,13 +35,13 @@ struct SettingsView: View {
                     }
                     .tint(.white)
                     .padding(16)
-                    .background(.white.opacity(0.055), in: RoundedRectangle(cornerRadius: AfterimageLayout.controlCornerRadius, style: .continuous))
+                    .afterimageCardSurface()
                     .animation(AfterimageMotion.quick, value: shareAttributionEnabled)
 
                     Spacer()
                 }
                 .foregroundStyle(.white)
-                .padding(.horizontal, AfterimageLayout.margin)
+                .padding(.horizontal, AfterimageLayout.horizontalScreenMargin)
                 .padding(.top, AfterimageLayout.headerTopSpacing)
                 .padding(.bottom, AfterimageLayout.margin)
             }

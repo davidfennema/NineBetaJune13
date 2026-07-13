@@ -38,42 +38,28 @@ struct CameraView: View {
 
     private var roll: Roll? { viewModel.activeRoll }
     private var previewSaturation: Double {
-        switch roll?.mode {
-        case .blackAndWhite:
-            return 0
-        case .desaturated:
-            return 0.42
-        case .highContrast:
-            return 1.08
-        default:
-            return 1
-        }
+        roll?.mode.previewSaturation ?? 1
     }
 
     private var previewContrast: Double {
-        switch roll?.mode {
-        case .highContrast:
-            return 1.22
-        default:
-            return 1
-        }
+        roll?.mode.previewContrast ?? 1
     }
 
     var body: some View {
         GeometryReader { geometry in
             let imageStage = AfterimageLayout.imageStage(in: geometry)
-            let shutterY = geometry.size.height - max(geometry.safeAreaInsets.bottom, 22) - 38
+            let shutterY = geometry.size.height - max(geometry.safeAreaInsets.bottom, 22) - AfterimageLayout.shutterBottomOffset
             let belowPreviewSwipeHeight = max(52, min(72, shutterY - imageStage.bottom - 96))
-            let underPreviewControlY = imageStage.bottom + 24
-            let belowPreviewSwipeY = imageStage.bottom + 72 + belowPreviewSwipeHeight / 2
+            let underPreviewControlY = imageStage.bottom + AfterimageLayout.imageStageControlOffset
+            let belowPreviewSwipeY = imageStage.bottom + AfterimageLayout.imageStageSwipeOffset + belowPreviewSwipeHeight / 2
 
             ZStack {
                 Color.black.ignoresSafeArea()
 
                 VStack(spacing: 0) {
                     header
-                        .padding(.top, geometry.safeAreaInsets.top + 14)
-                        .padding(.horizontal, AfterimageLayout.margin)
+                        .padding(.top, geometry.safeAreaInsets.top + AfterimageLayout.headerTopSpacing)
+                        .padding(.horizontal, AfterimageLayout.horizontalScreenMargin)
 
                     Spacer()
                 }
@@ -114,6 +100,44 @@ struct CameraView: View {
                 if camera.authorizationDenied {
                     permissionNotice
                 }
+                if showsCameraHelp, !showsFirstPassDecision {
+                    Color.black
+                        .opacity(0.001)
+                        .ignoresSafeArea()
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            withAnimation(AfterimageMotion.standard) {
+                                showsCameraHelp = false
+                            }
+                        }
+                        .zIndex(6)
+
+                    AfterimageFloatingNotification(
+                        text: "Pinch to zoom.\n\nSwipe to adjust exposure.\n\nLong-tap for AF lock."
+                    )
+                    .position(x: imageStage.centerX, y: imageStage.centerY)
+                    .transition(AfterimageMotion.toastTransition)
+                    .zIndex(7)
+                }
+                if let contextualHint, !showsFirstPassDecision, !showsCameraHelp {
+                    AfterimageFloatingNotification(text: contextualHint)
+                        .position(x: imageStage.centerX, y: imageStage.centerY)
+                        .allowsHitTesting(false)
+                        .transition(AfterimageMotion.toastTransition)
+                        .zIndex(6)
+                }
+                if showsFirstPassDecision {
+                    Color.black
+                        .opacity(0.001)
+                        .ignoresSafeArea()
+                        .contentShape(Rectangle())
+                        .zIndex(6)
+
+                    firstPassDecisionOverlay
+                        .position(x: imageStage.centerX, y: imageStage.centerY)
+                        .transition(AfterimageMotion.screenTransition)
+                        .zIndex(7)
+                }
                 if showsTransition {
                     transitionOverlay
                 }
@@ -132,18 +156,6 @@ struct CameraView: View {
             }
         }
         .onDisappear { camera.stop() }
-        .sheet(isPresented: $showsCameraHelp) {
-            NineInfoNoteView(
-                text: "Pinch to zoom.\n\nSwipe to adjust exposure.\n\nLong-tap for AF lock."
-            )
-                .presentationDetents([.medium])
-                .presentationDragIndicator(.visible)
-        }
-        .sheet(isPresented: $showsFirstPassDecision) {
-            firstPassDecisionSheet
-                .presentationDetents([.medium])
-                .presentationDragIndicator(.visible)
-        }
     }
 
     private func squarePreview(side: CGFloat) -> some View {
@@ -167,6 +179,10 @@ struct CameraView: View {
                     .transition(AfterimageMotion.subtleTransition)
             }
 
+            CompositionGrid()
+                .frame(width: side, height: side)
+                .allowsHitTesting(false)
+
             if showsBlackout {
                 Color.black
                     .transition(.opacity)
@@ -185,12 +201,6 @@ struct CameraView: View {
             )
             .frame(maxHeight: .infinity, alignment: .bottom)
 
-            if let contextualHint {
-                ContextualCameraHint(text: contextualHint)
-                    .frame(maxHeight: .infinity, alignment: .bottom)
-                    .padding(.bottom, 44)
-                    .transition(AfterimageMotion.toastTransition)
-            }
         }
         .frame(width: side, height: side)
         .clipped()
@@ -235,7 +245,7 @@ struct CameraView: View {
                 HStack(alignment: .center, spacing: AfterimageLayout.counterLockupSpacing) {
                     ExposureCounterView(
                         frameNumber: displayedFrameNumber,
-                        phase: roll?.phase ?? .firstPass,
+                        phase: displayedCapturePhase,
                         size: .compact
                     )
 
@@ -248,6 +258,7 @@ struct CameraView: View {
                 Spacer()
 
                 ProgressGrid(count: roll?.capturedFrameCount ?? 0)
+                    .padding(.trailing, 1)
             }
         }
     }
@@ -260,11 +271,11 @@ struct CameraView: View {
             Image(systemName: "camera.rotate")
                 .font(.system(size: 17, weight: .medium))
                 .foregroundStyle(.white.opacity(camera.canSwitchCamera ? 0.46 : 0.16))
-                .frame(width: 34, height: 34)
+                .frame(width: 38, height: 38)
                 .contentShape(Rectangle())
         }
         .buttonStyle(AfterimagePressButtonStyle())
-        .disabled(isCapturing || showsBlackout || showsTransition)
+        .disabled(isCapturing || showsBlackout || showsTransition || camera.isSwitchingCamera || !camera.isReady)
         .accessibilityLabel(camera.cameraPosition == .front ? "Switch to rear camera" : "Switch to front camera")
     }
 
@@ -374,7 +385,7 @@ struct CameraView: View {
         }
         .foregroundStyle(.white)
         .padding(28)
-        .background(.black.opacity(0.9), in: RoundedRectangle(cornerRadius: AfterimageLayout.controlCornerRadius, style: .continuous))
+        .background(.black.opacity(AfterimageOpacity.floatingOverlayBackground), in: RoundedRectangle(cornerRadius: AfterimageLayout.cardDialogCornerRadius, style: .continuous))
     }
 
     private var transitionOverlay: some View {
@@ -392,8 +403,16 @@ struct CameraView: View {
         min((roll?.capturedFrameCount ?? 0) + 1, Roll.frameCount)
     }
 
+    private var displayedCapturePhase: RollPhase {
+        guard let roll else { return .firstPass }
+        if roll.phase == .developing, roll.secondPassImages.count == Roll.frameCount {
+            return .secondPass
+        }
+        return roll.phase
+    }
+
     private var phaseCaption: String {
-        roll?.phase == .secondPass ? "SECOND PASS" : "FIRST PASS"
+        displayedCapturePhase == .secondPass ? "SECOND PASS" : "FIRST PASS"
     }
 
     private func touchTrackingGesture() -> some Gesture {
@@ -509,7 +528,9 @@ struct CameraView: View {
                 camera.resetFocusLockAfterCapture()
 
                 if milestone == .firstPassComplete {
-                    showsFirstPassDecision = true
+                    withAnimation(AfterimageMotion.standard) {
+                        showsFirstPassDecision = true
+                    }
                 }
             } catch {
                 camera.resetFocusLockAfterCapture()
@@ -520,14 +541,12 @@ struct CameraView: View {
         }
     }
 
-    private var firstPassDecisionSheet: some View {
-        ZStack {
-            Color.black.ignoresSafeArea()
-
-            VStack(spacing: 22) {
-                VStack(spacing: 10) {
+    private var firstPassDecisionOverlay: some View {
+        AfterimageDialogSurface {
+            VStack(spacing: AfterimageSpacing.large) {
+                VStack(spacing: AfterimageSpacing.medium) {
                     Text("First Pass Complete.")
-                        .font(.system(size: 18, weight: .medium))
+                        .font(AfterimageType.rollTitle)
                         .foregroundStyle(.white.opacity(0.88))
 
                     Text("Save for later?\n\nYou can keep up to 3 unfinished rolls.")
@@ -537,46 +556,32 @@ struct CameraView: View {
                         .lineSpacing(3)
                 }
 
-                VStack(spacing: 12) {
-                    Button {
+                VStack(spacing: AfterimageSpacing.medium) {
+                    AfterimageSecondaryButton(
+                        title: "Save First Pass",
+                        isDisabled: !viewModel.canSaveFirstPassForLater
+                    ) {
                         Task {
                             if await viewModel.saveFirstPassForLater() {
-                                showsFirstPassDecision = false
+                                withAnimation(AfterimageMotion.standard) {
+                                    showsFirstPassDecision = false
+                                }
                                 onReturnHome?()
                             }
                         }
-                    } label: {
-                        Text("Save First Pass")
-                            .font(AfterimageType.primaryAction)
-                            .foregroundStyle(.white.opacity(viewModel.canSaveFirstPassForLater ? 0.78 : 0.38))
-                            .frame(maxWidth: .infinity, minHeight: 48)
-                            .background(.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                            .overlay {
-                                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                    .stroke(.white.opacity(0.11), lineWidth: 1)
-                            }
                     }
-                    .buttonStyle(.plain)
-                    .disabled(!viewModel.canSaveFirstPassForLater)
 
-                    Button {
-                        showsFirstPassDecision = false
+                    AfterimagePrimaryButton(title: "Begin Second Pass") {
+                        withAnimation(AfterimageMotion.standard) {
+                            showsFirstPassDecision = false
+                        }
                         Task {
                             await viewModel.beginSecondPassForActiveRoll()
                             await showSecondPassTransition()
                         }
-                    } label: {
-                        Text("Begin Second Pass")
-                            .font(AfterimageType.primaryAction)
-                            .foregroundStyle(.black.opacity(0.92))
-                            .frame(maxWidth: .infinity, minHeight: 48)
-                            .background(.white.opacity(0.92), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                     }
-                    .buttonStyle(.plain)
                 }
             }
-            .padding(.horizontal, 24)
-            .padding(.vertical, 30)
         }
     }
 
@@ -682,17 +687,24 @@ private struct FocusReticle: View {
     }
 }
 
-private struct ContextualCameraHint: View {
-    let text: String
-
+private struct CompositionGrid: View {
     var body: some View {
-        Text(text)
-            .font(AfterimageType.caption)
-            .tracking(1.1)
-            .multilineTextAlignment(.center)
-            .foregroundStyle(.white.opacity(0.72))
-            .padding(.horizontal, 12)
-            .padding(.vertical, 9)
-            .background(.black.opacity(0.48), in: Capsule())
+        GeometryReader { proxy in
+            let width = proxy.size.width
+            let height = proxy.size.height
+
+            Path { path in
+                for index in 1...2 {
+                    let x = width * CGFloat(index) / 3
+                    path.move(to: CGPoint(x: x, y: 0))
+                    path.addLine(to: CGPoint(x: x, y: height))
+
+                    let y = height * CGFloat(index) / 3
+                    path.move(to: CGPoint(x: 0, y: y))
+                    path.addLine(to: CGPoint(x: width, y: y))
+                }
+            }
+            .stroke(.white.opacity(0.18), lineWidth: 0.6)
+        }
     }
 }

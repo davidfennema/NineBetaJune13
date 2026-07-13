@@ -21,6 +21,18 @@ enum NineCameraPosition: String, CaseIterable {
     }
 }
 
+enum NineCameraConnectionConfiguration {
+    static func apply(to connection: AVCaptureConnection, position: NineCameraPosition) {
+        if connection.isVideoOrientationSupported {
+            connection.videoOrientation = .portrait
+        }
+        if connection.isVideoMirroringSupported {
+            connection.automaticallyAdjustsVideoMirroring = false
+            connection.isVideoMirrored = position == .front
+        }
+    }
+}
+
 @MainActor
 final class CameraManager: NSObject, ObservableObject {
     @Published private(set) var authorizationDenied = false
@@ -33,6 +45,7 @@ final class CameraManager: NSObject, ObservableObject {
     @Published private(set) var cameraPosition: NineCameraPosition
     @Published private(set) var previewCameraPosition: NineCameraPosition
     @Published private(set) var canSwitchCamera = false
+    @Published private(set) var isSwitchingCamera = false
 
     var isPreviewMirrored: Bool {
         previewCameraPosition == .front
@@ -92,14 +105,14 @@ final class CameraManager: NSObject, ObservableObject {
             let settings = AVCapturePhotoSettings()
             settings.photoQualityPrioritization = .speed
             settings.flashMode = .off
-            configurePhotoConnection(for: cameraPosition)
+            configureConnections(for: cameraPosition)
             output.capturePhoto(with: settings, delegate: self)
         }
     }
 
     func switchCamera() {
         print("[Nine] Camera switch requested · current: \(cameraPosition.rawValue)")
-        guard !isHoldFocusLocked, continuation == nil else { return }
+        guard !isSwitchingCamera, !isHoldFocusLocked, continuation == nil else { return }
         let nextPosition = cameraPosition.alternate
         guard camera(for: nextPosition) != nil else {
             print("[Nine] Camera switch unavailable · missing: \(nextPosition.rawValue)")
@@ -107,7 +120,7 @@ final class CameraManager: NSObject, ObservableObject {
         }
 
         isReady = false
-        previewCameraPosition = nextPosition
+        isSwitchingCamera = true
         cancelHoldFocusLock()
         sessionQueue.async { [weak self] in
             guard let self else { return }
@@ -115,14 +128,17 @@ final class CameraManager: NSObject, ObservableObject {
                 try self.configureInput(position: nextPosition)
                 Task { @MainActor in
                     self.cameraPosition = nextPosition
+                    self.previewCameraPosition = nextPosition
                     self.resetPublishedCameraControls()
                     self.isReady = true
+                    self.isSwitchingCamera = false
                     print("[Nine] Camera switched · current: \(nextPosition.rawValue)")
                 }
             } catch {
                 Task { @MainActor in
                     self.previewCameraPosition = self.cameraPosition
                     self.isReady = true
+                    self.isSwitchingCamera = false
                     print("[Nine] Camera switch failed · \(error.localizedDescription)")
                 }
             }
@@ -269,7 +285,6 @@ final class CameraManager: NSObject, ObservableObject {
                 do {
                     self.session.beginConfiguration()
                     self.session.sessionPreset = .photo
-                    defer { self.session.commitConfiguration() }
 
                     guard self.camera(for: selectedPosition) != nil,
                           self.session.canAddOutput(self.output) else {
@@ -279,6 +294,8 @@ final class CameraManager: NSObject, ObservableObject {
                     self.session.addOutput(self.output)
                     try self.configureInput(position: selectedPosition, commitsSessionConfiguration: false)
                     self.output.maxPhotoQualityPrioritization = .speed
+                    self.session.commitConfiguration()
+                    self.configureConnections(for: selectedPosition)
                     self.isConfigured = true
                     let canSwitch = NineCameraPosition.allCases.allSatisfy { self.camera(for: $0) != nil }
                     Task { @MainActor in
@@ -289,6 +306,7 @@ final class CameraManager: NSObject, ObservableObject {
                         continuation.resume(returning: ())
                     }
                 } catch {
+                    self.session.commitConfiguration()
                     continuation.resume(throwing: error)
                 }
             }
@@ -341,11 +359,12 @@ final class CameraManager: NSObject, ObservableObject {
             throw CameraError.configurationFailed
         }
 
+        var needsCommit = commitsSessionConfiguration
         if commitsSessionConfiguration {
             session.beginConfiguration()
         }
         defer {
-            if commitsSessionConfiguration {
+            if needsCommit {
                 session.commitConfiguration()
             }
         }
@@ -370,21 +389,16 @@ final class CameraManager: NSObject, ObservableObject {
         currentInput = input
         device = camera
 
-        configurePhotoConnection(for: position)
+        if commitsSessionConfiguration {
+            session.commitConfiguration()
+            needsCommit = false
+            configureConnections(for: position)
+        }
     }
 
-    private nonisolated func configurePhotoConnection(for position: NineCameraPosition) {
-        guard let connection = output.connection(with: .video) else { return }
-
-        // Keep capture orientation explicit and shared for both initial camera setup and
-        // camera switches. Front captures are mirrored to match Nine's mirrored preview;
-        // rear captures are never mirrored.
-        if connection.isVideoOrientationSupported {
-            connection.videoOrientation = .portrait
-        }
-        if connection.isVideoMirroringSupported {
-            connection.automaticallyAdjustsVideoMirroring = false
-            connection.isVideoMirrored = position == .front
+    private nonisolated func configureConnections(for position: NineCameraPosition) {
+        if let connection = output.connection(with: .video) {
+            NineCameraConnectionConfiguration.apply(to: connection, position: position)
         }
     }
 

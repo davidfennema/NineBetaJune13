@@ -16,9 +16,11 @@ struct RevealView: View {
     var body: some View {
         GeometryReader { geometry in
             let imageStage = AfterimageLayout.imageStage(in: geometry)
-            let underImageControlY = imageStage.bottom + 24
+            let contactSheetCenterY = imageStage.centerY + AfterimageLayout.contactSheetOpticalOffset
+            let contactSheetBottom = imageStage.bottom + AfterimageLayout.contactSheetOpticalOffset
+            let underImageControlY = contactSheetBottom + AfterimageLayout.imageStageControlOffset - 2
             let swipeHeight = max(52, min(72, geometry.size.height - imageStage.bottom - geometry.safeAreaInsets.bottom - 110))
-            let swipeY = imageStage.bottom + 72 + swipeHeight / 2
+            let swipeY = contactSheetBottom + AfterimageLayout.imageStageSwipeOffset + swipeHeight / 2
 
             ZStack {
                 Color.black.ignoresSafeArea()
@@ -26,14 +28,14 @@ struct RevealView: View {
                 VStack(spacing: 0) {
                     revealHeader
                         .padding(.top, geometry.safeAreaInsets.top + AfterimageLayout.headerTopSpacing)
-                        .padding(.horizontal, AfterimageLayout.margin)
+                        .padding(.horizontal, AfterimageLayout.horizontalScreenMargin)
 
                     Spacer()
                 }
 
                 rollPager(side: imageStage.side)
                     .frame(width: imageStage.side, height: imageStage.side)
-                    .position(x: imageStage.centerX, y: imageStage.centerY)
+                    .position(x: imageStage.centerX, y: contactSheetCenterY)
 
                 underImageControlRow(width: imageStage.side)
                     .position(x: imageStage.centerX, y: underImageControlY)
@@ -57,13 +59,15 @@ struct RevealView: View {
                 .zIndex(4)
 
                 if let message = viewModel.statusMessage {
-                    toast(message)
+                    statusNotification(message)
+                        .position(x: imageStage.centerX, y: imageStage.centerY)
                         .transition(AfterimageMotion.toastTransition)
                         .zIndex(3)
                 }
 
                 if let message = viewModel.savedOverlayMessage {
-                    savedOverlay(message)
+                    savedNotification(message)
+                        .position(x: imageStage.centerX, y: imageStage.centerY)
                         .transition(AfterimageMotion.toastTransition)
                         .zIndex(10)
                 }
@@ -109,13 +113,11 @@ struct RevealView: View {
     private func rollPager(side: CGFloat) -> some View {
         TabView(selection: $pageIndex) {
             contactSheet
-                .padding(.horizontal, 2)
                 .frame(width: side, height: side)
                 .tag(0)
 
             ForEach(Array(images.enumerated()), id: \.offset) { index, image in
                 ZoomableImage(image: image)
-                    .padding(.horizontal, 4)
                     .frame(width: side, height: side)
                     .tag(index + 1)
             }
@@ -124,7 +126,10 @@ struct RevealView: View {
     }
 
     private var contactSheet: some View {
-        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 5), count: 3), spacing: 5) {
+        LazyVGrid(
+            columns: Array(repeating: GridItem(.flexible(), spacing: AfterimageLayout.contactSheetGridSpacing), count: 3),
+            spacing: AfterimageLayout.contactSheetGridSpacing
+        ) {
             ForEach(Array(images.enumerated()), id: \.offset) { index, image in
                 Button {
                     withAnimation(AfterimageMotion.standard) {
@@ -148,7 +153,7 @@ struct RevealView: View {
             }
         }
         .background(.black)
-        .padding(4)
+        .padding(AfterimageLayout.contactSheetGridSpacing)
         .overlay {
             Rectangle().stroke(.white.opacity(0.08), lineWidth: 1)
         }
@@ -260,17 +265,8 @@ struct RevealView: View {
         return abs(translation.width) > abs(translation.height) * 1.55
     }
 
-    private func toast(_ message: String) -> some View {
-        VStack {
-            Spacer()
-            Text(message)
-                .font(AfterimageType.body)
-                .foregroundStyle(.white.opacity(0.84))
-                .padding(.horizontal, 18)
-                .padding(.vertical, 11)
-                .background(.white.opacity(0.1), in: Capsule())
-                .padding(.bottom, 12)
-        }
+    private func statusNotification(_ message: String) -> some View {
+        AfterimageFloatingNotification(text: message)
         .onTapGesture { viewModel.statusMessage = nil }
         .task(id: message) {
             try? await Task.sleep(for: .milliseconds(1800))
@@ -281,17 +277,8 @@ struct RevealView: View {
         }
     }
 
-    private func savedOverlay(_ message: String) -> some View {
-        VStack {
-            Spacer()
-            Text(message)
-                .font(AfterimageType.body)
-                .foregroundStyle(.white.opacity(0.86))
-                .padding(.horizontal, 18)
-                .padding(.vertical, 11)
-                .background(.white.opacity(0.1), in: Capsule())
-                .padding(.bottom, 70)
-        }
+    private func savedNotification(_ message: String) -> some View {
+        AfterimageFloatingNotification(text: message)
         .allowsHitTesting(false)
         .task(id: message) {
             try? await Task.sleep(for: .milliseconds(1800))

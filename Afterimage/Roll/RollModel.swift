@@ -45,6 +45,28 @@ enum RollMode: String, Codable, CaseIterable, Identifiable {
         case .highContrast: return "Harder shadows"
         }
     }
+
+    var previewSaturation: Double {
+        switch self {
+        case .blackAndWhite:
+            return 0
+        case .desaturated:
+            return 0.42
+        case .highContrast:
+            return 1.08
+        case .freeform:
+            return 1
+        }
+    }
+
+    var previewContrast: Double {
+        switch self {
+        case .highContrast:
+            return 1.22
+        case .freeform, .desaturated, .blackAndWhite:
+            return 1
+        }
+    }
 }
 
 enum RollPhase: String, Codable {
@@ -78,6 +100,7 @@ func isPartialRollInProgress(_ roll: Roll?) -> Bool {
 func isValidResumeRoll(_ roll: Roll?, resume: ResumeRollState?) -> Bool {
     guard let roll, let resume else { return false }
     guard roll.id == resume.rollID else { return false }
+    guard !roll.isSavedFirstPassRoll else { return false }
     guard roll.blendedImages.isEmpty, roll.gridImage == nil else { return false }
 
     switch roll.phase {
@@ -126,6 +149,7 @@ struct Roll: Identifiable, Codable {
     var secondPassImages: [CapturedFrame]
     var blendedImages: [UIImage]
     var gridImage: UIImage?
+    var isSavedFirstPassRoll: Bool
 
     init(id: UUID = UUID(), createdAt: Date = Date(), mode: RollMode, title: String? = nil) {
         self.id = id
@@ -138,6 +162,7 @@ struct Roll: Identifiable, Codable {
         secondPassImages = []
         blendedImages = []
         gridImage = nil
+        isSavedFirstPassRoll = false
     }
 
     init(
@@ -150,7 +175,8 @@ struct Roll: Identifiable, Codable {
         firstPassImages: [CapturedFrame],
         secondPassImages: [CapturedFrame],
         blendedImages: [UIImage],
-        gridImage: UIImage?
+        gridImage: UIImage?,
+        isSavedFirstPassRoll: Bool = false
     ) {
         self.id = id
         self.createdAt = createdAt
@@ -162,6 +188,7 @@ struct Roll: Identifiable, Codable {
         self.secondPassImages = secondPassImages
         self.blendedImages = blendedImages
         self.gridImage = gridImage
+        self.isSavedFirstPassRoll = isSavedFirstPassRoll
     }
 
     var capturedFrameCount: Int {
@@ -228,6 +255,7 @@ struct Roll: Identifiable, Codable {
         }
         blendedImages = images
         self.gridImage = gridImage
+        isSavedFirstPassRoll = false
         phase = .complete
         updatedAt = Date()
     }
@@ -242,7 +270,7 @@ struct Roll: Identifiable, Codable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, createdAt, updatedAt, mode, title, phase, firstPassImages, secondPassImages, blendedImageData, gridImageData
+        case id, createdAt, updatedAt, mode, title, phase, firstPassImages, secondPassImages, blendedImageData, gridImageData, isSavedFirstPassRoll
     }
 
     init(from decoder: Decoder) throws {
@@ -258,6 +286,8 @@ struct Roll: Identifiable, Codable {
         let encodedImages = try container.decodeIfPresent([Data].self, forKey: .blendedImageData) ?? []
         blendedImages = encodedImages.compactMap(UIImage.init(data:))
         gridImage = try container.decodeIfPresent(Data.self, forKey: .gridImageData).flatMap(UIImage.init(data:))
+        isSavedFirstPassRoll = try container.decodeIfPresent(Bool.self, forKey: .isSavedFirstPassRoll)
+            ?? (phase == .awaitingSecondPass)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -272,6 +302,7 @@ struct Roll: Identifiable, Codable {
         try container.encode(secondPassImages, forKey: .secondPassImages)
         try container.encode(blendedImages.compactMap { $0.jpegData(compressionQuality: 0.96) }, forKey: .blendedImageData)
         try container.encodeIfPresent(gridImage?.jpegData(compressionQuality: 0.96), forKey: .gridImageData)
+        try container.encode(isSavedFirstPassRoll, forKey: .isSavedFirstPassRoll)
     }
 }
 
@@ -294,9 +325,10 @@ struct RollManifest: Codable {
     let secondPassFrames: [FrameReference]
     let blendedFramePaths: [String]
     let gridPath: String?
+    let isSavedFirstPassRoll: Bool
 
     private enum CodingKeys: String, CodingKey {
-        case id, createdAt, updatedAt, mode, title, phase, currentFrameIndex, firstPassFrames, secondPassFrames, blendedFramePaths, gridPath
+        case id, createdAt, updatedAt, mode, title, phase, currentFrameIndex, firstPassFrames, secondPassFrames, blendedFramePaths, gridPath, isSavedFirstPassRoll
     }
 
     init(
@@ -310,7 +342,8 @@ struct RollManifest: Codable {
         firstPassFrames: [FrameReference],
         secondPassFrames: [FrameReference],
         blendedFramePaths: [String],
-        gridPath: String?
+        gridPath: String?,
+        isSavedFirstPassRoll: Bool
     ) {
         self.id = id
         self.createdAt = createdAt
@@ -323,6 +356,7 @@ struct RollManifest: Codable {
         self.secondPassFrames = secondPassFrames
         self.blendedFramePaths = blendedFramePaths
         self.gridPath = gridPath
+        self.isSavedFirstPassRoll = isSavedFirstPassRoll
     }
 
     init(from decoder: Decoder) throws {
@@ -338,6 +372,8 @@ struct RollManifest: Codable {
         secondPassFrames = try container.decode([FrameReference].self, forKey: .secondPassFrames)
         blendedFramePaths = try container.decode([String].self, forKey: .blendedFramePaths)
         gridPath = try container.decodeIfPresent(String.self, forKey: .gridPath)
+        isSavedFirstPassRoll = try container.decodeIfPresent(Bool.self, forKey: .isSavedFirstPassRoll)
+            ?? (phase == .awaitingSecondPass)
     }
 }
 
@@ -406,7 +442,7 @@ struct ResumeRollState: Codable, Equatable {
     }
 
     init?(roll: Roll) {
-        guard shouldResumeToCamera(roll) else { return nil }
+        guard shouldResumeToCamera(roll), !roll.isSavedFirstPassRoll else { return nil }
         self.init(
             rollID: roll.id,
             phase: roll.phase,

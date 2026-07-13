@@ -42,7 +42,7 @@ struct SharePreviewView: View {
                     }
                 }
                 .transition(AfterimageMotion.screenTransition)
-                .padding(.horizontal, AfterimageLayout.margin)
+                .padding(.horizontal, AfterimageLayout.horizontalScreenMargin)
                 .padding(.top, AfterimageLayout.headerTopSpacing)
                 .padding(.bottom, AfterimageLayout.margin)
             }

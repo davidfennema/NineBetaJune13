@@ -196,14 +196,10 @@ struct RootView: View {
     }
 
     private func showHome() {
+        viewModel.parkActiveRollForLibrary()
         routeDirection = .back
         withAnimation(routeAnimation) {
             launchDestination = .home
-        }
-        Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(230))
-            guard case .home = launchDestination else { return }
-            viewModel.parkActiveRollForLibrary()
         }
     }
 
