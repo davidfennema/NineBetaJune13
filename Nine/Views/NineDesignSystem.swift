@@ -1,19 +1,19 @@
 import SwiftUI
 
-enum AfterimageLayout {
+enum NineLayout {
     static let margin: CGFloat = 24
     static let horizontalScreenMargin = margin
     static let primaryButtonHeight: CGFloat = 46
     static let primaryButtonCornerRadius: CGFloat = 8
     static let cardDialogCornerRadius: CGFloat = 8
-    static let dialogHorizontalPadding = AfterimageSpacing.large
+    static let dialogHorizontalPadding = NineSpacing.large
     static let dialogVerticalPadding: CGFloat = 26
     static let dialogMaxWidth: CGFloat = 340
     static let notificationHorizontalPadding: CGFloat = 18
     static let notificationVerticalPadding: CGFloat = 12
     static let notificationMaxWidth: CGFloat = 250
     static let contactSheetGridSpacing: CGFloat = 4
-    static let rowSpacing = AfterimageSpacing.large
+    static let rowSpacing = NineSpacing.large
     static let headerTopSpacing: CGFloat = 32
     static let imageStageTopOffset: CGFloat = 112
     static let imageStageHeightRatio: CGFloat = 0.54
@@ -36,13 +36,13 @@ enum AfterimageLayout {
         EdgeInsets(top: top, leading: margin, bottom: bottom, trailing: margin)
     }
 
-    static func imageStage(in geometry: GeometryProxy) -> AfterimageImageStage {
+    static func imageStage(in geometry: GeometryProxy) -> NineImageStage {
         let side = min(
             geometry.size.width - (horizontalScreenMargin * 2),
             geometry.size.height * imageStageHeightRatio
         )
         let top = geometry.safeAreaInsets.top + imageStageTopOffset
-        return AfterimageImageStage(
+        return NineImageStage(
             side: side,
             top: top,
             centerX: geometry.size.width / 2
@@ -54,7 +54,7 @@ enum AfterimageLayout {
     }
 }
 
-enum AfterimageSpacing {
+enum NineSpacing {
     static let extraSmall: CGFloat = 4
     static let small: CGFloat = 8
     static let medium: CGFloat = 12
@@ -62,7 +62,7 @@ enum AfterimageSpacing {
     static let extraLarge: CGFloat = 32
 }
 
-enum AfterimageOpacity {
+enum NineOpacity {
     static let dimmed: Double = 0.55
     static let disabled: Double = 0.38
     static let floatingOverlayBackground: Double = 0.9
@@ -76,11 +76,11 @@ enum AfterimageOpacity {
     static let notificationText: Double = 0.78
 }
 
-enum AfterimageSurface {
+enum NineSurface {
     static let floatingOverlayMaterial: Material = .ultraThinMaterial
 }
 
-struct AfterimageImageStage {
+struct NineImageStage {
     let side: CGFloat
     let top: CGFloat
     let centerX: CGFloat
@@ -94,7 +94,7 @@ struct AfterimageImageStage {
     }
 }
 
-enum AfterimageType {
+enum NineType {
     static func system(size: CGFloat, weight: Font.Weight = .regular) -> Font {
         .system(size: size, weight: weight)
     }
@@ -115,7 +115,7 @@ enum AfterimageType {
     static let instrumentCaption = mono(size: 10, weight: .medium)
 }
 
-enum AfterimageMotion {
+enum NineMotion {
     static let transientDuration: Double = 0.24
 
     static let quick = Animation.easeInOut(duration: 0.15)
@@ -137,36 +137,36 @@ enum AfterimageMotion {
         .combined(with: .offset(y: 10))
 }
 
-struct AfterimagePressButtonStyle: ButtonStyle {
+struct NinePressButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .scaleEffect(configuration.isPressed ? 0.985 : 1)
             .opacity(configuration.isPressed ? 0.82 : 1)
-            .animation(AfterimageMotion.quick, value: configuration.isPressed)
+            .animation(NineMotion.quick, value: configuration.isPressed)
     }
 }
 
-struct AfterimageBackButton: View {
+struct NineBackButton: View {
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
             Image(systemName: "chevron.left")
-                .font(.system(size: AfterimageLayout.backIconSize, weight: .medium))
+                .font(.system(size: NineLayout.backIconSize, weight: .medium))
                 .foregroundStyle(.white.opacity(0.54))
                 .frame(
-                    width: AfterimageLayout.backControlSize,
-                    height: AfterimageLayout.backControlSize,
+                    width: NineLayout.backControlSize,
+                    height: NineLayout.backControlSize,
                     alignment: .leading
                 )
                 .contentShape(Rectangle())
         }
-        .buttonStyle(AfterimagePressButtonStyle())
+        .buttonStyle(NinePressButtonStyle())
         .accessibilityLabel("Back")
     }
 }
 
-struct AfterimageCloseButton: View {
+struct NineCloseButton: View {
     let action: () -> Void
 
     var body: some View {
@@ -177,12 +177,12 @@ struct AfterimageCloseButton: View {
                 .frame(width: 44, height: 44)
                 .contentShape(Rectangle())
         }
-        .buttonStyle(AfterimagePressButtonStyle())
+        .buttonStyle(NinePressButtonStyle())
         .accessibilityLabel("Close")
     }
 }
 
-struct AfterimagePrimaryButton: View {
+struct NinePrimaryButton: View {
     let title: String
     var isDisabled = false
     let action: () -> Void
@@ -190,18 +190,18 @@ struct AfterimagePrimaryButton: View {
     var body: some View {
         Button(action: action) {
             Text(title)
-                .font(AfterimageType.primaryAction)
+                .font(NineType.primaryAction)
                 .tracking(0.35)
                 .foregroundStyle(.black.opacity(isDisabled ? 0.45 : 0.92))
-                .frame(maxWidth: .infinity, minHeight: AfterimageLayout.primaryButtonHeight)
-                .background(.white.opacity(0.92), in: RoundedRectangle(cornerRadius: AfterimageLayout.primaryButtonCornerRadius, style: .continuous))
+                .frame(maxWidth: .infinity, minHeight: NineLayout.primaryButtonHeight)
+                .background(.white.opacity(0.92), in: RoundedRectangle(cornerRadius: NineLayout.primaryButtonCornerRadius, style: .continuous))
         }
-        .buttonStyle(AfterimagePressButtonStyle())
+        .buttonStyle(NinePressButtonStyle())
         .disabled(isDisabled)
     }
 }
 
-struct AfterimageSecondaryButton: View {
+struct NineSecondaryButton: View {
     let title: String
     var isDisabled = false
     let action: () -> Void
@@ -209,25 +209,25 @@ struct AfterimageSecondaryButton: View {
     var body: some View {
         Button(action: action) {
             Text(title)
-                .font(AfterimageType.primaryAction)
+                .font(NineType.primaryAction)
                 .tracking(0.35)
-                .foregroundStyle(.white.opacity(isDisabled ? AfterimageOpacity.disabled : 0.78))
-                .frame(maxWidth: .infinity, minHeight: AfterimageLayout.primaryButtonHeight)
+                .foregroundStyle(.white.opacity(isDisabled ? NineOpacity.disabled : 0.78))
+                .frame(maxWidth: .infinity, minHeight: NineLayout.primaryButtonHeight)
                 .background(
-                    .white.opacity(AfterimageOpacity.secondaryButtonBackground),
-                    in: RoundedRectangle(cornerRadius: AfterimageLayout.primaryButtonCornerRadius, style: .continuous)
+                    .white.opacity(NineOpacity.secondaryButtonBackground),
+                    in: RoundedRectangle(cornerRadius: NineLayout.primaryButtonCornerRadius, style: .continuous)
                 )
                 .overlay {
-                    RoundedRectangle(cornerRadius: AfterimageLayout.primaryButtonCornerRadius, style: .continuous)
-                        .stroke(.white.opacity(AfterimageOpacity.secondaryButtonStroke), lineWidth: 1)
+                    RoundedRectangle(cornerRadius: NineLayout.primaryButtonCornerRadius, style: .continuous)
+                        .stroke(.white.opacity(NineOpacity.secondaryButtonStroke), lineWidth: 1)
                 }
         }
-        .buttonStyle(AfterimagePressButtonStyle())
+        .buttonStyle(NinePressButtonStyle())
         .disabled(isDisabled)
     }
 }
 
-struct AfterimageDialogSurface<Content: View>: View {
+struct NineDialogSurface<Content: View>: View {
     let content: Content
 
     init(@ViewBuilder content: () -> Content) {
@@ -236,83 +236,83 @@ struct AfterimageDialogSurface<Content: View>: View {
 
     var body: some View {
         content
-            .padding(.horizontal, AfterimageLayout.dialogHorizontalPadding)
-            .padding(.vertical, AfterimageLayout.dialogVerticalPadding)
-            .frame(maxWidth: AfterimageLayout.dialogMaxWidth)
-            .background(AfterimageSurface.floatingOverlayMaterial, in: RoundedRectangle(cornerRadius: AfterimageLayout.cardDialogCornerRadius, style: .continuous))
-            .background(.black.opacity(AfterimageOpacity.dialogBackground), in: RoundedRectangle(cornerRadius: AfterimageLayout.cardDialogCornerRadius, style: .continuous))
+            .padding(.horizontal, NineLayout.dialogHorizontalPadding)
+            .padding(.vertical, NineLayout.dialogVerticalPadding)
+            .frame(maxWidth: NineLayout.dialogMaxWidth)
+            .background(NineSurface.floatingOverlayMaterial, in: RoundedRectangle(cornerRadius: NineLayout.cardDialogCornerRadius, style: .continuous))
+            .background(.black.opacity(NineOpacity.dialogBackground), in: RoundedRectangle(cornerRadius: NineLayout.cardDialogCornerRadius, style: .continuous))
             .overlay {
-                RoundedRectangle(cornerRadius: AfterimageLayout.cardDialogCornerRadius, style: .continuous)
-                    .stroke(.white.opacity(AfterimageOpacity.dialogStroke), lineWidth: 1)
+                RoundedRectangle(cornerRadius: NineLayout.cardDialogCornerRadius, style: .continuous)
+                    .stroke(.white.opacity(NineOpacity.dialogStroke), lineWidth: 1)
             }
             .shadow(color: .black.opacity(0.32), radius: 22, y: 12)
     }
 }
 
-struct AfterimageFloatingNotification: View {
+struct NineFloatingNotification: View {
     let text: String
 
     var body: some View {
         Text(text)
-            .font(AfterimageType.caption)
+            .font(NineType.caption)
             .tracking(0.55)
             .multilineTextAlignment(.center)
-            .foregroundStyle(.white.opacity(AfterimageOpacity.notificationText))
+            .foregroundStyle(.white.opacity(NineOpacity.notificationText))
             .lineLimit(5)
             .fixedSize(horizontal: false, vertical: true)
-            .padding(.horizontal, AfterimageLayout.notificationHorizontalPadding)
-            .padding(.vertical, AfterimageLayout.notificationVerticalPadding)
-            .frame(maxWidth: AfterimageLayout.notificationMaxWidth)
+            .padding(.horizontal, NineLayout.notificationHorizontalPadding)
+            .padding(.vertical, NineLayout.notificationVerticalPadding)
+            .frame(maxWidth: NineLayout.notificationMaxWidth)
             .background(
-                AfterimageSurface.floatingOverlayMaterial,
-                in: RoundedRectangle(cornerRadius: AfterimageLayout.cardDialogCornerRadius, style: .continuous)
+                NineSurface.floatingOverlayMaterial,
+                in: RoundedRectangle(cornerRadius: NineLayout.cardDialogCornerRadius, style: .continuous)
             )
             .background(
-                .black.opacity(AfterimageOpacity.notificationBackground),
-                in: RoundedRectangle(cornerRadius: AfterimageLayout.cardDialogCornerRadius, style: .continuous)
+                .black.opacity(NineOpacity.notificationBackground),
+                in: RoundedRectangle(cornerRadius: NineLayout.cardDialogCornerRadius, style: .continuous)
             )
             .overlay {
-                RoundedRectangle(cornerRadius: AfterimageLayout.cardDialogCornerRadius, style: .continuous)
-                    .stroke(.white.opacity(AfterimageOpacity.notificationStroke), lineWidth: 1)
+                RoundedRectangle(cornerRadius: NineLayout.cardDialogCornerRadius, style: .continuous)
+                    .stroke(.white.opacity(NineOpacity.notificationStroke), lineWidth: 1)
             }
             .shadow(color: .black.opacity(0.24), radius: 12, y: 6)
     }
 }
 
-private struct AfterimageCardSurfaceModifier: ViewModifier {
-    var fillOpacity = AfterimageOpacity.secondaryButtonBackground
-    var strokeOpacity = AfterimageOpacity.dialogStroke
+private struct NineCardSurfaceModifier: ViewModifier {
+    var fillOpacity = NineOpacity.secondaryButtonBackground
+    var strokeOpacity = NineOpacity.dialogStroke
 
     func body(content: Content) -> some View {
         content
             .background(
                 .white.opacity(fillOpacity),
-                in: RoundedRectangle(cornerRadius: AfterimageLayout.cardDialogCornerRadius, style: .continuous)
+                in: RoundedRectangle(cornerRadius: NineLayout.cardDialogCornerRadius, style: .continuous)
             )
             .overlay {
-                RoundedRectangle(cornerRadius: AfterimageLayout.cardDialogCornerRadius, style: .continuous)
+                RoundedRectangle(cornerRadius: NineLayout.cardDialogCornerRadius, style: .continuous)
                     .stroke(.white.opacity(strokeOpacity), lineWidth: 1)
             }
     }
 }
 
 extension View {
-    func afterimageCardSurface(
-        fillOpacity: Double = AfterimageOpacity.secondaryButtonBackground,
-        strokeOpacity: Double = AfterimageOpacity.dialogStroke
+    func nineCardSurface(
+        fillOpacity: Double = NineOpacity.secondaryButtonBackground,
+        strokeOpacity: Double = NineOpacity.dialogStroke
     ) -> some View {
-        modifier(AfterimageCardSurfaceModifier(fillOpacity: fillOpacity, strokeOpacity: strokeOpacity))
+        modifier(NineCardSurfaceModifier(fillOpacity: fillOpacity, strokeOpacity: strokeOpacity))
     }
 }
 
-struct AfterimageMetadataLabel: View {
+struct NineMetadataLabel: View {
     let text: String
     var opacity: Double = 0.42
     var tracking: CGFloat = 1.2
 
     var body: some View {
         Text(text)
-            .font(AfterimageType.metadata)
+            .font(NineType.metadata)
             .tracking(tracking)
             .foregroundStyle(.white.opacity(opacity))
     }
@@ -325,7 +325,7 @@ struct NineInfoNoteView: View {
         ZStack {
             Color.black.ignoresSafeArea()
 
-            AfterimageDialogSurface {
+            NineDialogSurface {
                 Text(text)
                     .font(.system(size: 19, weight: .regular))
                     .lineSpacing(3)
@@ -333,7 +333,7 @@ struct NineInfoNoteView: View {
                     .foregroundStyle(.white.opacity(0.76))
                     .fixedSize(horizontal: false, vertical: true)
             }
-            .padding(.horizontal, AfterimageLayout.horizontalScreenMargin)
+            .padding(.horizontal, NineLayout.horizontalScreenMargin)
         }
     }
 }

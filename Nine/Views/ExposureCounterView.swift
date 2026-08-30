@@ -179,7 +179,7 @@ struct ExposureCounterView: View {
         visibleLabel = nextLabel
         wheelOffset = 0
 
-        withAnimation(AfterimageMotion.quick) {
+        withAnimation(NineMotion.quick) {
             wheelOffset = -size.windowSize.height
         }
 

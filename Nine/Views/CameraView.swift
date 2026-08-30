@@ -23,8 +23,8 @@ struct CameraView: View {
     @State private var hintTask: Task<Void, Never>?
     @State private var showsCameraHelp = false
     @State private var showsFirstPassDecision = false
-    @AppStorage("afterimage.didShowFocusLockHint") private var didShowFocusLockHint = false
-    @AppStorage("afterimage.didShowPinchHint") private var didShowPinchHint = false
+    @AppStorage("nine.didShowFocusLockHint") private var didShowFocusLockHint = false
+    @AppStorage("nine.didShowPinchHint") private var didShowPinchHint = false
 
     init(viewModel: RollViewModel, onReturnHome: (() -> Void)? = nil) {
         self.viewModel = viewModel
@@ -47,19 +47,19 @@ struct CameraView: View {
 
     var body: some View {
         GeometryReader { geometry in
-            let imageStage = AfterimageLayout.imageStage(in: geometry)
-            let shutterY = geometry.size.height - max(geometry.safeAreaInsets.bottom, 22) - AfterimageLayout.shutterBottomOffset
+            let imageStage = NineLayout.imageStage(in: geometry)
+            let shutterY = geometry.size.height - max(geometry.safeAreaInsets.bottom, 22) - NineLayout.shutterBottomOffset
             let belowPreviewSwipeHeight = max(52, min(72, shutterY - imageStage.bottom - 96))
-            let underPreviewControlY = imageStage.bottom + AfterimageLayout.imageStageControlOffset
-            let belowPreviewSwipeY = imageStage.bottom + AfterimageLayout.imageStageSwipeOffset + belowPreviewSwipeHeight / 2
+            let underPreviewControlY = imageStage.bottom + NineLayout.imageStageControlOffset
+            let belowPreviewSwipeY = imageStage.bottom + NineLayout.imageStageSwipeOffset + belowPreviewSwipeHeight / 2
 
             ZStack {
                 Color.black.ignoresSafeArea()
 
                 VStack(spacing: 0) {
                     header
-                        .padding(.top, geometry.safeAreaInsets.top + AfterimageLayout.headerTopSpacing)
-                        .padding(.horizontal, AfterimageLayout.horizontalScreenMargin)
+                        .padding(.top, geometry.safeAreaInsets.top + NineLayout.headerTopSpacing)
+                        .padding(.horizontal, NineLayout.horizontalScreenMargin)
 
                     Spacer()
                 }
@@ -88,12 +88,12 @@ struct CameraView: View {
                     .position(x: 12, y: geometry.size.height / 2)
                     .zIndex(3)
 
-                AfterimageCloseButton {
+                NineCloseButton {
                     onReturnHome?()
                 }
                 .position(
-                    x: AfterimageLayout.margin,
-                    y: AfterimageLayout.closeControlY(in: geometry)
+                    x: NineLayout.margin,
+                    y: NineLayout.closeControlY(in: geometry)
                 )
                 .zIndex(5)
 
@@ -106,24 +106,24 @@ struct CameraView: View {
                         .ignoresSafeArea()
                         .contentShape(Rectangle())
                         .onTapGesture {
-                            withAnimation(AfterimageMotion.standard) {
+                            withAnimation(NineMotion.standard) {
                                 showsCameraHelp = false
                             }
                         }
                         .zIndex(6)
 
-                    AfterimageFloatingNotification(
+                    NineFloatingNotification(
                         text: "Pinch to zoom.\n\nSwipe to adjust exposure.\n\nLong-tap for AF lock."
                     )
                     .position(x: imageStage.centerX, y: imageStage.centerY)
-                    .transition(AfterimageMotion.toastTransition)
+                    .transition(NineMotion.toastTransition)
                     .zIndex(7)
                 }
                 if let contextualHint, !showsFirstPassDecision, !showsCameraHelp {
-                    AfterimageFloatingNotification(text: contextualHint)
+                    NineFloatingNotification(text: contextualHint)
                         .position(x: imageStage.centerX, y: imageStage.centerY)
                         .allowsHitTesting(false)
-                        .transition(AfterimageMotion.toastTransition)
+                        .transition(NineMotion.toastTransition)
                         .zIndex(6)
                 }
                 if showsFirstPassDecision {
@@ -135,7 +135,7 @@ struct CameraView: View {
 
                     firstPassDecisionOverlay
                         .position(x: imageStage.centerX, y: imageStage.centerY)
-                        .transition(AfterimageMotion.screenTransition)
+                        .transition(NineMotion.screenTransition)
                         .zIndex(7)
                 }
                 if showsTransition {
@@ -176,7 +176,7 @@ struct CameraView: View {
                     .opacity(0.58)
                     .blendMode(.screen)
                     .allowsHitTesting(false)
-                    .transition(AfterimageMotion.subtleTransition)
+                    .transition(NineMotion.subtleTransition)
             }
 
             CompositionGrid()
@@ -191,7 +191,7 @@ struct CameraView: View {
             if let focusPoint {
                 FocusReticle(isLocked: camera.isHoldFocusLocked)
                     .position(focusPoint)
-                    .transition(AfterimageMotion.subtleTransition)
+                    .transition(NineMotion.subtleTransition)
             }
 
             ViewfinderInfoOverlay(
@@ -242,7 +242,7 @@ struct CameraView: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .center) {
-                HStack(alignment: .center, spacing: AfterimageLayout.counterLockupSpacing) {
+                HStack(alignment: .center, spacing: NineLayout.counterLockupSpacing) {
                     ExposureCounterView(
                         frameNumber: displayedFrameNumber,
                         phase: displayedCapturePhase,
@@ -250,7 +250,7 @@ struct CameraView: View {
                     )
 
                     Text(phaseCaption)
-                        .font(AfterimageType.instrumentCaption)
+                        .font(NineType.instrumentCaption)
                         .tracking(1.35)
                         .foregroundStyle(.white.opacity(0.38))
                 }
@@ -274,7 +274,7 @@ struct CameraView: View {
                 .frame(width: 38, height: 38)
                 .contentShape(Rectangle())
         }
-        .buttonStyle(AfterimagePressButtonStyle())
+        .buttonStyle(NinePressButtonStyle())
         .disabled(isCapturing || showsBlackout || showsTransition || camera.isSwitchingCamera || !camera.isReady)
         .accessibilityLabel(camera.cameraPosition == .front ? "Switch to rear camera" : "Switch to front camera")
     }
@@ -289,7 +289,7 @@ struct CameraView: View {
                 .frame(width: 38, height: 38)
                 .contentShape(Rectangle())
         }
-        .buttonStyle(AfterimagePressButtonStyle())
+        .buttonStyle(NinePressButtonStyle())
         .disabled(showsTransition)
         .accessibilityLabel("Camera help")
     }
@@ -314,7 +314,7 @@ struct CameraView: View {
 
     private var rollStyleLabel: some View {
         Text(roll?.mode.title ?? "Natural")
-            .font(AfterimageType.caption)
+            .font(NineType.caption)
             .tracking(0.45)
             .foregroundStyle(.white.opacity(0.36))
             .lineLimit(1)
@@ -369,34 +369,34 @@ struct CameraView: View {
                     .frame(width: 62, height: 62)
                     .scaleEffect(isCapturing ? 0.91 : 1)
             }
-            .animation(AfterimageMotion.quick, value: isCapturing)
+            .animation(NineMotion.quick, value: isCapturing)
         }
         .disabled(!camera.isReady || isCapturing || showsTransition)
-        .buttonStyle(AfterimagePressButtonStyle())
+        .buttonStyle(NinePressButtonStyle())
     }
 
     private var permissionNotice: some View {
         VStack(spacing: 12) {
             Text("Camera access is required")
-                .font(AfterimageType.rollTitle)
+                .font(NineType.rollTitle)
             Text("Allow access in Settings to expose a roll.")
-                .font(AfterimageType.body)
+                .font(NineType.body)
                 .foregroundStyle(.white.opacity(0.56))
         }
         .foregroundStyle(.white)
         .padding(28)
-        .background(.black.opacity(AfterimageOpacity.floatingOverlayBackground), in: RoundedRectangle(cornerRadius: AfterimageLayout.cardDialogCornerRadius, style: .continuous))
+        .background(.black.opacity(NineOpacity.floatingOverlayBackground), in: RoundedRectangle(cornerRadius: NineLayout.cardDialogCornerRadius, style: .continuous))
     }
 
     private var transitionOverlay: some View {
         ZStack {
             Color.black.ignoresSafeArea()
             Text(transitionText)
-                .font(AfterimageType.rollTitle)
+                .font(NineType.rollTitle)
                 .foregroundStyle(.white.opacity(0.92))
-                .transition(AfterimageMotion.subtleTransition)
+                .transition(NineMotion.subtleTransition)
         }
-        .transition(AfterimageMotion.screenTransition)
+        .transition(NineMotion.screenTransition)
     }
 
     private var displayedFrameNumber: Int {
@@ -474,25 +474,25 @@ struct CameraView: View {
 
     private func showFocusReticle(at point: CGPoint) {
         focusFeedbackTask?.cancel()
-        withAnimation(AfterimageMotion.quick) {
+        withAnimation(NineMotion.quick) {
             focusPoint = point
         }
         focusFeedbackTask = Task {
             try? await Task.sleep(for: .milliseconds(700))
             guard !Task.isCancelled else { return }
-            withAnimation(AfterimageMotion.standard) { focusPoint = nil }
+            withAnimation(NineMotion.standard) { focusPoint = nil }
         }
     }
 
     private func showLockedFeedback(at point: CGPoint) {
         focusFeedbackTask?.cancel()
-        withAnimation(AfterimageMotion.quick) {
+        withAnimation(NineMotion.quick) {
             focusPoint = point
         }
         focusFeedbackTask = Task {
             try? await Task.sleep(for: .milliseconds(780))
             guard !Task.isCancelled else { return }
-            withAnimation(AfterimageMotion.standard) {
+            withAnimation(NineMotion.standard) {
                 focusPoint = nil
             }
         }
@@ -500,13 +500,13 @@ struct CameraView: View {
 
     private func showContextualHint(_ text: String) {
         hintTask?.cancel()
-        withAnimation(AfterimageMotion.quick) {
+        withAnimation(NineMotion.quick) {
             contextualHint = text
         }
         hintTask = Task {
             try? await Task.sleep(for: .seconds(1.8))
             guard !Task.isCancelled else { return }
-            withAnimation(AfterimageMotion.standard) {
+            withAnimation(NineMotion.standard) {
                 contextualHint = nil
             }
         }
@@ -528,7 +528,7 @@ struct CameraView: View {
                 camera.resetFocusLockAfterCapture()
 
                 if milestone == .firstPassComplete {
-                    withAnimation(AfterimageMotion.standard) {
+                    withAnimation(NineMotion.standard) {
                         showsFirstPassDecision = true
                     }
                 }
@@ -542,28 +542,28 @@ struct CameraView: View {
     }
 
     private var firstPassDecisionOverlay: some View {
-        AfterimageDialogSurface {
-            VStack(spacing: AfterimageSpacing.large) {
-                VStack(spacing: AfterimageSpacing.medium) {
+        NineDialogSurface {
+            VStack(spacing: NineSpacing.large) {
+                VStack(spacing: NineSpacing.medium) {
                     Text("First Pass Complete.")
-                        .font(AfterimageType.rollTitle)
+                        .font(NineType.rollTitle)
                         .foregroundStyle(.white.opacity(0.88))
 
                     Text("Save for later?\n\nYou can keep up to 3 unfinished rolls.")
-                        .font(AfterimageType.body)
+                        .font(NineType.body)
                         .multilineTextAlignment(.center)
                         .foregroundStyle(.white.opacity(0.58))
                         .lineSpacing(3)
                 }
 
-                VStack(spacing: AfterimageSpacing.medium) {
-                    AfterimageSecondaryButton(
+                VStack(spacing: NineSpacing.medium) {
+                    NineSecondaryButton(
                         title: "Save First Pass",
                         isDisabled: !viewModel.canSaveFirstPassForLater
                     ) {
                         Task {
                             if await viewModel.saveFirstPassForLater() {
-                                withAnimation(AfterimageMotion.standard) {
+                                withAnimation(NineMotion.standard) {
                                     showsFirstPassDecision = false
                                 }
                                 onReturnHome?()
@@ -571,8 +571,8 @@ struct CameraView: View {
                         }
                     }
 
-                    AfterimagePrimaryButton(title: "Begin Second Pass") {
-                        withAnimation(AfterimageMotion.standard) {
+                    NinePrimaryButton(title: "Begin Second Pass") {
+                        withAnimation(NineMotion.standard) {
                             showsFirstPassDecision = false
                         }
                         Task {
@@ -607,29 +607,29 @@ struct CameraView: View {
     }
 
     private func blinkShutter() {
-        withAnimation(AfterimageMotion.quick) {
+        withAnimation(NineMotion.quick) {
             showsBlackout = true
         }
         Task {
             try? await Task.sleep(for: .milliseconds(95))
-            withAnimation(AfterimageMotion.quick) {
+            withAnimation(NineMotion.quick) {
                 showsBlackout = false
             }
         }
     }
 
     private func showSecondPassTransition() async {
-        withAnimation(AfterimageMotion.reveal) {
+        withAnimation(NineMotion.reveal) {
             showsTransition = true
             transitionText = "First exposure complete."
         }
         try? await Task.sleep(for: .seconds(1.35))
-        withAnimation(AfterimageMotion.reveal) {
+        withAnimation(NineMotion.reveal) {
             transitionText = "Begin second pass."
         }
         try? await Task.sleep(for: .seconds(1.25))
         showsBlackout = false
-        withAnimation(AfterimageMotion.longReveal) { showsTransition = false }
+        withAnimation(NineMotion.longReveal) { showsTransition = false }
     }
 
     private func normalizedCameraPoint(from point: CGPoint, side: CGFloat) -> CGPoint {
@@ -668,7 +668,7 @@ private struct ProgressGrid: View {
             }
         }
         .frame(width: 28)
-        .animation(AfterimageMotion.standard, value: count)
+        .animation(NineMotion.standard, value: count)
     }
 }
 

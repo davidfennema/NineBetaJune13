@@ -6,11 +6,15 @@ struct HomeView: View {
     var onStartRoll: ((RollMode, Bool) async -> Void)?
     var onOpenSavedRoll: ((Roll) async -> Void)?
     var onOpenRoll: ((Roll) -> Void)?
+    var onShowUnlockPromptForTesting: (() -> Void)?
     @State private var selectedMode: RollMode = .freeform
     @State private var replacementMode: RollMode = .freeform
     @State private var showsAbout = false
     @State private var showsStartOverConfirmation = false
     @State private var showsReplacementStylePicker = false
+    #if DEBUG
+    @AppStorage("nine.debug.forcePurchaseGate") private var debugForcePurchaseGate = false
+    #endif
 
     var body: some View {
         let _ = print("[Nine] HomeView body rendered · activeRoll exists: \(viewModel.activeRoll != nil) · resumeState exists: \(viewModel.resumeState != nil)")
@@ -19,10 +23,10 @@ struct HomeView: View {
             Color.black.ignoresSafeArea()
 
             ScrollView(showsIndicators: false) {
-                VStack(spacing: AfterimageSpacing.large) {
+                VStack(spacing: NineSpacing.large) {
                     NineBrandMark()
                         .frame(width: 188, height: 188)
-                        .padding(.top, AfterimageSpacing.extraLarge * 2)
+                        .padding(.top, NineSpacing.extraLarge * 2)
                         .contentShape(Rectangle())
                         .onTapGesture {
                             showsAbout = true
@@ -47,43 +51,47 @@ struct HomeView: View {
 
                     if let statusMessage = viewModel.statusMessage {
                         Text(statusMessage)
-                            .font(AfterimageType.body)
+                            .font(NineType.body)
                             .multilineTextAlignment(.center)
-                            .foregroundStyle(.white.opacity(AfterimageOpacity.dimmed))
-                            .padding(.horizontal, AfterimageLayout.horizontalScreenMargin)
+                            .foregroundStyle(.white.opacity(NineOpacity.dimmed))
+                            .padding(.horizontal, NineLayout.horizontalScreenMargin)
                     }
+
+                    #if DEBUG
+                    purchaseTestingPanel
+                    #endif
 
                     Spacer(minLength: 60)
                 }
-                .padding(.horizontal, AfterimageLayout.horizontalScreenMargin)
+                .padding(.horizontal, NineLayout.horizontalScreenMargin)
                 .frame(maxWidth: .infinity)
             }
 
             if showsStartOverConfirmation {
                 ZStack {
                     Color.black
-                        .opacity(AfterimageOpacity.dialogScrim)
+                        .opacity(NineOpacity.dialogScrim)
                         .ignoresSafeArea()
                         .contentShape(Rectangle())
 
                     startOverConfirmationDialog
-                        .padding(.horizontal, AfterimageLayout.horizontalScreenMargin)
+                        .padding(.horizontal, NineLayout.horizontalScreenMargin)
                 }
-                .transition(AfterimageMotion.screenTransition)
+                .transition(NineMotion.screenTransition)
                 .zIndex(2)
             }
 
             if showsReplacementStylePicker {
                 ZStack {
                     Color.black
-                        .opacity(AfterimageOpacity.dialogScrim)
+                        .opacity(NineOpacity.dialogScrim)
                         .ignoresSafeArea()
                         .contentShape(Rectangle())
 
                     replacementStyleDialog
-                        .padding(.horizontal, AfterimageLayout.horizontalScreenMargin)
+                        .padding(.horizontal, NineLayout.horizontalScreenMargin)
                 }
-                .transition(AfterimageMotion.screenTransition)
+                .transition(NineMotion.screenTransition)
                 .zIndex(3)
             }
         }
@@ -98,31 +106,31 @@ struct HomeView: View {
     }
 
     private var createSection: some View {
-        VStack(spacing: AfterimageSpacing.large) {
+        VStack(spacing: NineSpacing.large) {
             modeSelection
             startNewRollButton
         }
-        .padding(.top, AfterimageLayout.decisionGroupOpticalOffset)
+        .padding(.top, NineLayout.decisionGroupOpticalOffset)
     }
 
     private var resumeSection: some View {
-        VStack(spacing: AfterimageSpacing.medium) {
-            AfterimageSecondaryButton(title: "Continue Roll") {
+        VStack(spacing: NineSpacing.medium) {
+            NineSecondaryButton(title: "Continue Roll") {
                 onContinueRoll?()
             }
         }
     }
 
     private var startNewRollButton: some View {
-        VStack(spacing: AfterimageSpacing.medium) {
+        VStack(spacing: NineSpacing.medium) {
             if viewModel.hasInProgressRoll {
-                AfterimageSecondaryButton(title: "Start New Roll") {
-                    withAnimation(AfterimageMotion.standard) {
+                NineSecondaryButton(title: "Start New Roll") {
+                    withAnimation(NineMotion.standard) {
                         showsStartOverConfirmation = true
                     }
                 }
             } else {
-                AfterimagePrimaryButton(title: "Start New Roll") {
+                NinePrimaryButton(title: "Start New Roll") {
                     Task {
                         await onStartRoll?(selectedMode, false)
                     }
@@ -132,30 +140,30 @@ struct HomeView: View {
     }
 
     private var startOverConfirmationDialog: some View {
-        AfterimageDialogSurface {
-            VStack(spacing: AfterimageSpacing.large) {
-                VStack(spacing: AfterimageSpacing.medium) {
+        NineDialogSurface {
+            VStack(spacing: NineSpacing.large) {
+                VStack(spacing: NineSpacing.medium) {
                     Text("Discard unfinished first pass?")
-                        .font(AfterimageType.rollTitle)
+                        .font(NineType.rollTitle)
                         .foregroundStyle(.white.opacity(0.88))
 
                     Text("This roll hasn't completed its first pass yet, so it can't be saved for later.")
-                        .font(AfterimageType.body)
+                        .font(NineType.body)
                         .multilineTextAlignment(.center)
                         .foregroundStyle(.white.opacity(0.58))
                         .lineSpacing(3)
                 }
 
-                VStack(spacing: AfterimageSpacing.medium) {
-                    AfterimageSecondaryButton(title: "Cancel") {
-                        withAnimation(AfterimageMotion.standard) {
+                VStack(spacing: NineSpacing.medium) {
+                    NineSecondaryButton(title: "Cancel") {
+                        withAnimation(NineMotion.standard) {
                             showsStartOverConfirmation = false
                         }
                     }
 
-                    AfterimagePrimaryButton(title: "Discard Roll and Start Over") {
+                    NinePrimaryButton(title: "Discard Roll and Start Over") {
                         replacementMode = activeRollMode ?? selectedMode
-                        withAnimation(AfterimageMotion.standard) {
+                        withAnimation(NineMotion.standard) {
                             showsStartOverConfirmation = false
                             showsReplacementStylePicker = true
                         }
@@ -166,17 +174,17 @@ struct HomeView: View {
     }
 
     private var replacementStyleDialog: some View {
-        AfterimageDialogSurface {
-            VStack(spacing: AfterimageSpacing.large) {
+        NineDialogSurface {
+            VStack(spacing: NineSpacing.large) {
                 Text("Choose Style")
-                    .font(AfterimageType.rollTitle)
+                    .font(NineType.rollTitle)
                     .foregroundStyle(.white.opacity(0.86))
 
                 replacementModeSelection
 
-                AfterimagePrimaryButton(title: "Begin Roll") {
+                NinePrimaryButton(title: "Begin Roll") {
                     selectedMode = replacementMode
-                    withAnimation(AfterimageMotion.standard) {
+                    withAnimation(NineMotion.standard) {
                         showsReplacementStylePicker = false
                     }
                     Task {
@@ -196,11 +204,11 @@ struct HomeView: View {
     }
 
     private func modeSelection(selectedMode: Binding<RollMode>) -> some View {
-        VStack(alignment: .center, spacing: AfterimageSpacing.small) {
+        VStack(alignment: .center, spacing: NineSpacing.small) {
             LazyVGrid(
-                columns: Array(repeating: GridItem(.fixed(118), spacing: AfterimageSpacing.large, alignment: .center), count: 2),
+                columns: Array(repeating: GridItem(.fixed(118), spacing: NineSpacing.large, alignment: .center), count: 2),
                 alignment: .center,
-                spacing: AfterimageSpacing.medium
+                spacing: NineSpacing.medium
             ) {
                 ForEach(RollMode.allCases) { mode in
                     Button {
@@ -224,12 +232,51 @@ struct HomeView: View {
             ?? viewModel.resumeState?.mode
     }
 
+    #if DEBUG
+    private var purchaseTestingPanel: some View {
+        VStack(alignment: .leading, spacing: NineSpacing.medium) {
+            Text("Purchase Testing")
+                .font(NineType.metadata)
+                .tracking(1.2)
+                .foregroundStyle(.white.opacity(NineOpacity.dimmed))
+
+            VStack(spacing: NineSpacing.medium) {
+                Text("Free roll: \(viewModel.hasCompletedFreeRoll ? "complete" : "not complete")")
+                    .font(NineType.body)
+                    .foregroundStyle(.white.opacity(0.58))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                Toggle("Force locked state", isOn: $debugForcePurchaseGate)
+                    .font(NineType.body)
+                    .tint(.white)
+
+                NineSecondaryButton(title: "Mark Free Roll Complete") {
+                    viewModel.debugMarkFreeRollCompleted()
+                }
+
+                if let onShowUnlockPromptForTesting {
+                    NineSecondaryButton(title: "Show Unlock Prompt") {
+                        onShowUnlockPromptForTesting()
+                    }
+                }
+
+                NineSecondaryButton(title: "Reset Free Roll Flag") {
+                    viewModel.debugClearFreeRollCompletion()
+                }
+            }
+            .padding(14)
+            .nineCardSurface()
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+    #endif
+
     private var savedRollsList: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Saved Rolls")
-                .font(AfterimageType.metadata)
+                .font(NineType.metadata)
                 .tracking(1.2)
-                .foregroundStyle(.white.opacity(AfterimageOpacity.dimmed))
+                .foregroundStyle(.white.opacity(NineOpacity.dimmed))
 
             List {
                 ForEach(viewModel.savedFirstPassRolls) { roll in
@@ -248,7 +295,7 @@ struct HomeView: View {
                     .listRowBackground(Color.clear)
                     .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                         Button(role: .destructive) {
-                            withAnimation(AfterimageMotion.standard) {
+                            withAnimation(NineMotion.standard) {
                                 viewModel.deleteSavedFirstPassRoll(roll)
                             }
                         } label: {
@@ -268,9 +315,9 @@ struct HomeView: View {
     private var archiveList: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Completed Rolls")
-                .font(AfterimageType.metadata)
+                .font(NineType.metadata)
                 .tracking(1.2)
-                .foregroundStyle(.white.opacity(AfterimageOpacity.dimmed))
+                .foregroundStyle(.white.opacity(NineOpacity.dimmed))
 
             List {
                 ForEach(viewModel.storedRolls) { roll in
@@ -291,7 +338,7 @@ struct HomeView: View {
                     .listRowBackground(Color.clear)
                     .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                         Button(role: .destructive) {
-                            withAnimation(AfterimageMotion.standard) {
+                            withAnimation(NineMotion.standard) {
                                 viewModel.deleteStoredRoll(roll)
                             }
                         } label: {
@@ -318,16 +365,16 @@ private struct SavedFirstPassRollRow: View {
 
             VStack(alignment: .leading, spacing: 5) {
                 Text(roll.title)
-                    .font(AfterimageType.archiveTitle)
+                    .font(NineType.archiveTitle)
                     .foregroundStyle(.white)
                     .lineLimit(1)
 
                 Text(savedRollStatus)
-                    .font(AfterimageType.rollListStatus)
+                    .font(NineType.rollListStatus)
                     .foregroundStyle(.white.opacity(0.48))
 
                 Text(roll.mode.title)
-                    .font(AfterimageType.rollListStyle)
+                    .font(NineType.rollListStyle)
                     .tracking(1.0)
                     .foregroundStyle(.white.opacity(0.34))
             }
@@ -336,7 +383,7 @@ private struct SavedFirstPassRollRow: View {
         }
         .padding(10)
         .frame(maxWidth: .infinity, minHeight: 76, alignment: .leading)
-        .afterimageCardSurface()
+        .nineCardSurface()
         .contentShape(Rectangle())
     }
 
@@ -398,7 +445,7 @@ private struct ModeRadioRow: View {
             .frame(width: 22, height: 22)
 
             Text(title)
-                .font(AfterimageType.body)
+                .font(NineType.body)
                 .foregroundStyle(.white.opacity(isSelected ? 0.96 : 0.72))
                 .multilineTextAlignment(.center)
                 .lineLimit(1)
@@ -428,16 +475,16 @@ private struct ArchiveRollRow: View {
 
             VStack(alignment: .leading, spacing: 5) {
                 Text(roll.title)
-                    .font(AfterimageType.archiveTitle)
+                    .font(NineType.archiveTitle)
                     .foregroundStyle(.white)
                     .lineLimit(1)
 
                 Text(roll.createdAt.formatted(date: .abbreviated, time: .shortened))
-                    .font(AfterimageType.rollListStatus)
+                    .font(NineType.rollListStatus)
                     .foregroundStyle(.white.opacity(0.48))
 
                 Text(roll.mode.title)
-                    .font(AfterimageType.rollListStyle)
+                    .font(NineType.rollListStyle)
                     .tracking(1.0)
                     .foregroundStyle(.white.opacity(0.34))
             }
@@ -446,7 +493,7 @@ private struct ArchiveRollRow: View {
         }
         .padding(10)
         .frame(maxWidth: .infinity, minHeight: 76, alignment: .leading)
-        .afterimageCardSurface()
+        .nineCardSurface()
         .contentShape(Rectangle())
     }
 

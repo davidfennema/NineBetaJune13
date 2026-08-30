@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct SettingsView: View {
-    @AppStorage("afterimage.shareAttributionEnabled") private var shareAttributionEnabled = true
+    @AppStorage("nine.shareAttributionEnabled") private var shareAttributionEnabled = true
     let onDismiss: () -> Void
 
     var body: some View {
@@ -9,41 +9,41 @@ struct SettingsView: View {
             ZStack {
                 Color.black.ignoresSafeArea()
 
-                VStack(alignment: .leading, spacing: AfterimageLayout.rowSpacing) {
+                VStack(alignment: .leading, spacing: NineLayout.rowSpacing) {
                     HStack {
-                        AfterimageBackButton(action: onDismiss)
+                        NineBackButton(action: onDismiss)
                         Spacer()
                     }
 
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Settings")
-                            .font(AfterimageType.screenTitle)
+                            .font(NineType.screenTitle)
                             .tracking(0.2)
                         Text("Quiet preferences for exported rolls.")
-                            .font(AfterimageType.body)
+                            .font(NineType.body)
                             .foregroundStyle(.white.opacity(0.46))
                     }
 
                     Toggle(isOn: $shareAttributionEnabled) {
                         VStack(alignment: .leading, spacing: 5) {
                             Text("Nine mark")
-                                .font(AfterimageType.archiveTitle)
+                                .font(NineType.archiveTitle)
                             Text("Adds a small lab-style mark to shared exports.")
-                                .font(AfterimageType.body)
+                                .font(NineType.body)
                                 .foregroundStyle(.white.opacity(0.46))
                         }
                     }
                     .tint(.white)
                     .padding(16)
-                    .afterimageCardSurface()
-                    .animation(AfterimageMotion.quick, value: shareAttributionEnabled)
+                    .nineCardSurface()
+                    .animation(NineMotion.quick, value: shareAttributionEnabled)
 
                     Spacer()
                 }
                 .foregroundStyle(.white)
-                .padding(.horizontal, AfterimageLayout.horizontalScreenMargin)
-                .padding(.top, AfterimageLayout.headerTopSpacing)
-                .padding(.bottom, AfterimageLayout.margin)
+                .padding(.horizontal, NineLayout.horizontalScreenMargin)
+                .padding(.top, NineLayout.headerTopSpacing)
+                .padding(.bottom, NineLayout.margin)
             }
             .toolbar(.hidden, for: .navigationBar)
         }

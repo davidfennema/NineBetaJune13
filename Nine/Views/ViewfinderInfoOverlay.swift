@@ -14,7 +14,7 @@ struct ViewfinderInfoOverlay: View {
                 .monospacedDigit()
                 .foregroundStyle(glowColor.opacity(0.88))
                 .contentTransition(.opacity)
-                .animation(AfterimageMotion.quick, value: zoomText)
+                .animation(NineMotion.quick, value: zoomText)
                 .shadow(color: glowColor.opacity(0.26), radius: 4)
 
             Spacer(minLength: 18)
@@ -24,7 +24,7 @@ struct ViewfinderInfoOverlay: View {
                 .tracking(1.4)
                 .foregroundStyle(glowColor.opacity(0.86))
                 .opacity(isFocusLocked ? 1 : 0)
-                .animation(AfterimageMotion.quick, value: isFocusLocked)
+                .animation(NineMotion.quick, value: isFocusLocked)
                 .shadow(color: glowColor.opacity(isFocusLocked ? 0.28 : 0), radius: 4)
 
             Spacer(minLength: 18)
@@ -34,7 +34,7 @@ struct ViewfinderInfoOverlay: View {
                 .monospacedDigit()
                 .foregroundStyle(glowColor.opacity(0.88))
                 .contentTransition(.opacity)
-                .animation(AfterimageMotion.quick, value: exposureText)
+                .animation(NineMotion.quick, value: exposureText)
                 .shadow(color: glowColor.opacity(0.26), radius: 4)
         }
         .padding(.horizontal, 16)

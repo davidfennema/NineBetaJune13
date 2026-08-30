@@ -3,7 +3,7 @@ import SwiftUI
 struct RevealView: View {
     @ObservedObject var viewModel: RollViewModel
     var onReturnHome: (() -> Void)?
-    @AppStorage("afterimage.shareAttributionEnabled") private var shareAttributionEnabled = true
+    @AppStorage("nine.shareAttributionEnabled") private var shareAttributionEnabled = true
     @State private var visibleFrameCount = 0
     @State private var pageIndex = 0
     @State private var shareItem: SharePreviewItem?
@@ -15,20 +15,20 @@ struct RevealView: View {
 
     var body: some View {
         GeometryReader { geometry in
-            let imageStage = AfterimageLayout.imageStage(in: geometry)
-            let contactSheetCenterY = imageStage.centerY + AfterimageLayout.contactSheetOpticalOffset
-            let contactSheetBottom = imageStage.bottom + AfterimageLayout.contactSheetOpticalOffset
-            let underImageControlY = contactSheetBottom + AfterimageLayout.imageStageControlOffset - 2
+            let imageStage = NineLayout.imageStage(in: geometry)
+            let contactSheetCenterY = imageStage.centerY + NineLayout.contactSheetOpticalOffset
+            let contactSheetBottom = imageStage.bottom + NineLayout.contactSheetOpticalOffset
+            let underImageControlY = contactSheetBottom + NineLayout.imageStageControlOffset - 2
             let swipeHeight = max(52, min(72, geometry.size.height - imageStage.bottom - geometry.safeAreaInsets.bottom - 110))
-            let swipeY = contactSheetBottom + AfterimageLayout.imageStageSwipeOffset + swipeHeight / 2
+            let swipeY = contactSheetBottom + NineLayout.imageStageSwipeOffset + swipeHeight / 2
 
             ZStack {
                 Color.black.ignoresSafeArea()
 
                 VStack(spacing: 0) {
                     revealHeader
-                        .padding(.top, geometry.safeAreaInsets.top + AfterimageLayout.headerTopSpacing)
-                        .padding(.horizontal, AfterimageLayout.horizontalScreenMargin)
+                        .padding(.top, geometry.safeAreaInsets.top + NineLayout.headerTopSpacing)
+                        .padding(.horizontal, NineLayout.horizontalScreenMargin)
 
                     Spacer()
                 }
@@ -49,26 +49,26 @@ struct RevealView: View {
                     .position(x: 12, y: geometry.size.height / 2)
                     .zIndex(2)
 
-                AfterimageCloseButton {
+                NineCloseButton {
                     onReturnHome?()
                 }
                 .position(
-                    x: AfterimageLayout.margin,
-                    y: AfterimageLayout.closeControlY(in: geometry)
+                    x: NineLayout.margin,
+                    y: NineLayout.closeControlY(in: geometry)
                 )
                 .zIndex(4)
 
                 if let message = viewModel.statusMessage {
                     statusNotification(message)
                         .position(x: imageStage.centerX, y: imageStage.centerY)
-                        .transition(AfterimageMotion.toastTransition)
+                        .transition(NineMotion.toastTransition)
                         .zIndex(3)
                 }
 
                 if let message = viewModel.savedOverlayMessage {
                     savedNotification(message)
                         .position(x: imageStage.centerX, y: imageStage.centerY)
-                        .transition(AfterimageMotion.toastTransition)
+                        .transition(NineMotion.toastTransition)
                         .zIndex(10)
                 }
             }
@@ -83,7 +83,7 @@ struct RevealView: View {
             guard !images.isEmpty else { return }
             for index in 1...images.count {
                 try? await Task.sleep(for: .milliseconds(index == 1 ? 150 : 78))
-                withAnimation(AfterimageMotion.reveal) {
+                withAnimation(NineMotion.reveal) {
                     visibleFrameCount = index
                 }
             }
@@ -102,7 +102,7 @@ struct RevealView: View {
                 }
             }
             Text(viewModel.activeRoll?.mode.title ?? "")
-                .font(AfterimageType.metadata)
+                .font(NineType.metadata)
                 .tracking(1.2)
                 .foregroundStyle(.white.opacity(0.42))
         }
@@ -127,12 +127,12 @@ struct RevealView: View {
 
     private var contactSheet: some View {
         LazyVGrid(
-            columns: Array(repeating: GridItem(.flexible(), spacing: AfterimageLayout.contactSheetGridSpacing), count: 3),
-            spacing: AfterimageLayout.contactSheetGridSpacing
+            columns: Array(repeating: GridItem(.flexible(), spacing: NineLayout.contactSheetGridSpacing), count: 3),
+            spacing: NineLayout.contactSheetGridSpacing
         ) {
             ForEach(Array(images.enumerated()), id: \.offset) { index, image in
                 Button {
-                    withAnimation(AfterimageMotion.standard) {
+                    withAnimation(NineMotion.standard) {
                         pageIndex = index + 1
                     }
                 } label: {
@@ -147,13 +147,13 @@ struct RevealView: View {
                         .offset(y: index < visibleFrameCount ? 0 : 6)
                         .contentShape(Rectangle())
                 }
-                .buttonStyle(AfterimagePressButtonStyle())
+                .buttonStyle(NinePressButtonStyle())
                 .disabled(index >= visibleFrameCount)
                 .accessibilityLabel("Open frame \(index + 1)")
             }
         }
         .background(.black)
-        .padding(AfterimageLayout.contactSheetGridSpacing)
+        .padding(NineLayout.contactSheetGridSpacing)
         .overlay {
             Rectangle().stroke(.white.opacity(0.08), lineWidth: 1)
         }
@@ -165,7 +165,7 @@ struct RevealView: View {
                 .opacity(pageIndex > 0 ? 1 : 0)
 
             Text(pageIndex == 0 ? "Contact Sheet" : "\(pageIndex)/\(images.count)")
-                .font(AfterimageType.metadata)
+                .font(NineType.metadata)
                 .tracking(1.1)
                 .foregroundStyle(.white.opacity(0.48))
                 .contentTransition(.opacity)
@@ -173,12 +173,12 @@ struct RevealView: View {
             Text("›")
                 .opacity(pageIndex > 0 && pageIndex < images.count ? 1 : 0)
         }
-        .font(AfterimageType.caption)
+        .font(NineType.caption)
         .foregroundStyle(.white.opacity(0.52))
         .frame(height: 18)
         .allowsHitTesting(false)
         .contentTransition(.opacity)
-        .animation(AfterimageMotion.quick, value: pageIndex)
+        .animation(NineMotion.quick, value: pageIndex)
     }
 
     private func underImageControlRow(width: CGFloat) -> some View {
@@ -201,7 +201,7 @@ struct RevealView: View {
 
     private var contactSheetIconButton: some View {
         Button {
-            withAnimation(AfterimageMotion.standard) {
+            withAnimation(NineMotion.standard) {
                 pageIndex = 0
             }
         } label: {
@@ -211,7 +211,7 @@ struct RevealView: View {
                 .frame(width: 38, height: 38)
                 .contentShape(Rectangle())
         }
-        .buttonStyle(AfterimagePressButtonStyle())
+        .buttonStyle(NinePressButtonStyle())
         .disabled(pageIndex == 0)
         .accessibilityLabel(pageIndex == 0 ? "Contact sheet, current" : "Contact sheet")
     }
@@ -226,7 +226,7 @@ struct RevealView: View {
                 .frame(width: 38, height: 38)
                 .contentShape(Rectangle())
         }
-        .buttonStyle(AfterimagePressButtonStyle())
+        .buttonStyle(NinePressButtonStyle())
         .disabled(viewModel.isExporting || isPreparingShare || images.isEmpty)
         .accessibilityLabel(isPreparingShare ? "Preparing share" : "Share")
     }
@@ -266,23 +266,23 @@ struct RevealView: View {
     }
 
     private func statusNotification(_ message: String) -> some View {
-        AfterimageFloatingNotification(text: message)
+        NineFloatingNotification(text: message)
         .onTapGesture { viewModel.statusMessage = nil }
         .task(id: message) {
             try? await Task.sleep(for: .milliseconds(1800))
             guard viewModel.statusMessage == message else { return }
-            withAnimation(AfterimageMotion.quick) {
+            withAnimation(NineMotion.quick) {
                 viewModel.statusMessage = nil
             }
         }
     }
 
     private func savedNotification(_ message: String) -> some View {
-        AfterimageFloatingNotification(text: message)
+        NineFloatingNotification(text: message)
         .allowsHitTesting(false)
         .task(id: message) {
             try? await Task.sleep(for: .milliseconds(1800))
-            withAnimation(AfterimageMotion.quick) {
+            withAnimation(NineMotion.quick) {
                 viewModel.clearSavedOverlayMessage(message)
             }
         }
@@ -306,14 +306,14 @@ struct RevealView: View {
     }
 
     private func prepareShare(kind: ShareExportKind, roll: Roll, render: @escaping () -> UIImage?) {
-        withAnimation(AfterimageMotion.quick) {
+        withAnimation(NineMotion.quick) {
             isPreparingShare = true
         }
         Task {
             let image = await Task.detached(priority: .userInitiated) {
                 render()
             }.value
-            withAnimation(AfterimageMotion.quick) {
+            withAnimation(NineMotion.quick) {
                 isPreparingShare = false
             }
             guard let image else {

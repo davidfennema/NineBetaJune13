@@ -4,7 +4,7 @@ Nine is a deliberately constrained square-format iOS camera: a nine-frame roll e
 
 ## Run
 
-Open `Afterimage.xcodeproj` in Xcode, select the `Nine` scheme, and run on a physical iPhone running iOS 18 or later. A device is required for meaningful camera and Photos behavior.
+Open `Nine.xcodeproj` in Xcode, select the `Nine` scheme, and run on a physical iPhone running iOS 18 or later. A device is required for meaningful camera and Photos behavior.
 
 ## Implemented Experience
 
@@ -22,11 +22,11 @@ Open `Afterimage.xcodeproj` in Xcode, select the `Nine` scheme, and run on a phy
 
 ## Structure
 
-- `Afterimage/Camera`: AVFoundation session ownership and SwiftUI preview.
-- `Afterimage/Roll`: roll state machine and app-level view model.
-- `Afterimage/Processing`: blend pipeline and 3 by 3 grid renderer.
-- `Afterimage/Persistence`: on-device roll archive and Photos writer.
-- `Afterimage/Views`: home, camera ritual, developing state, and reveal viewer.
+- `Nine/Camera`: AVFoundation session ownership and SwiftUI preview.
+- `Nine/Roll`: roll state machine and app-level view model.
+- `Nine/Processing`: blend pipeline and 3 by 3 grid renderer.
+- `Nine/Persistence`: on-device roll archive and Photos writer.
+- `Nine/Views`: home, camera ritual, developing state, and reveal viewer.
 
 ## Development Notes
 

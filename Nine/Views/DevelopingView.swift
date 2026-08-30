@@ -12,9 +12,9 @@ struct DevelopingView: View {
                     .frame(width: 5, height: 5)
                     .scaleEffect(breath ? 1.7 : 0.8)
                     .opacity(breath ? 0.45 : 1)
-                    .animation(AfterimageMotion.breath, value: breath)
+                    .animation(NineMotion.breath, value: breath)
                 Text("Developing Roll...")
-                    .font(AfterimageType.rollTitle)
+                    .font(NineType.rollTitle)
                     .tracking(0.2)
                     .foregroundStyle(.white.opacity(0.86))
             }

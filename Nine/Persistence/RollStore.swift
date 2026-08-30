@@ -8,9 +8,11 @@ struct RollLoadResult {
 }
 
 enum ResumeRollCache {
-    private static let key = "afterimage.resumeRollState"
+    private static let key = "nine.resumeRollState"
+    private static let legacyKey = "afterimage.resumeRollState"
 
     static func load() -> ResumeRollState? {
+        migrateLegacyStateIfNeeded()
         guard let data = UserDefaults.standard.data(forKey: key) else { return nil }
         return try? JSONDecoder.nine.decode(ResumeRollState.self, from: data)
     }
@@ -19,13 +21,25 @@ enum ResumeRollCache {
         if let state,
            let data = try? JSONEncoder.nine.encode(state) {
             UserDefaults.standard.set(data, forKey: key)
+            UserDefaults.standard.removeObject(forKey: legacyKey)
         } else {
             UserDefaults.standard.removeObject(forKey: key)
+            UserDefaults.standard.removeObject(forKey: legacyKey)
         }
     }
 
     static func clear() {
         save(nil)
+    }
+
+    private static func migrateLegacyStateIfNeeded() {
+        guard UserDefaults.standard.data(forKey: key) == nil,
+              let legacyData = UserDefaults.standard.data(forKey: legacyKey) else {
+            return
+        }
+
+        UserDefaults.standard.set(legacyData, forKey: key)
+        UserDefaults.standard.removeObject(forKey: legacyKey)
     }
 }
 

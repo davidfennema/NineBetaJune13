@@ -14,7 +14,7 @@ struct SharePreviewView: View {
 
                 VStack(spacing: 22) {
                     HStack {
-                        AfterimageBackButton(action: onDismiss)
+                        NineBackButton(action: onDismiss)
                         Spacer()
                     }
 
@@ -28,23 +28,23 @@ struct SharePreviewView: View {
                         }
 
                     Text(item.title)
-                        .font(AfterimageType.rollTitle)
+                        .font(NineType.rollTitle)
                         .tracking(0.2)
                         .foregroundStyle(.white.opacity(0.94))
                         .multilineTextAlignment(.center)
                         .lineLimit(2)
                         .minimumScaleFactor(0.74)
 
-                    AfterimagePrimaryButton(title: "Share") {
-                        withAnimation(AfterimageMotion.quick) {
+                    NinePrimaryButton(title: "Share") {
+                        withAnimation(NineMotion.quick) {
                             showsShareSheet = true
                         }
                     }
                 }
-                .transition(AfterimageMotion.screenTransition)
-                .padding(.horizontal, AfterimageLayout.horizontalScreenMargin)
-                .padding(.top, AfterimageLayout.headerTopSpacing)
-                .padding(.bottom, AfterimageLayout.margin)
+                .transition(NineMotion.screenTransition)
+                .padding(.horizontal, NineLayout.horizontalScreenMargin)
+                .padding(.top, NineLayout.headerTopSpacing)
+                .padding(.bottom, NineLayout.margin)
             }
             .toolbar(.hidden, for: .navigationBar)
         }

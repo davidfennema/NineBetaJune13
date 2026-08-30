@@ -60,15 +60,15 @@ struct IntroView: View {
                 .ignoresSafeArea(edges: .top)
 
                 introPanel
-                    .padding(.horizontal, AfterimageLayout.horizontalScreenMargin)
+                    .padding(.horizontal, NineLayout.horizontalScreenMargin)
                     .padding(.bottom, max(geometry.safeAreaInsets.bottom, 18))
             }
         }
     }
 
     private var introPanel: some View {
-        VStack(spacing: AfterimageSpacing.extraLarge) {
-            VStack(spacing: AfterimageSpacing.medium) {
+        VStack(spacing: NineSpacing.extraLarge) {
+            VStack(spacing: NineSpacing.medium) {
                 Text("Nine")
                     .font(.system(size: 34, weight: .semibold))
                     .foregroundStyle(.white.opacity(0.94))
@@ -81,12 +81,12 @@ struct IntroView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            AfterimagePrimaryButton(title: buttonTitle) {
+            NinePrimaryButton(title: buttonTitle) {
                 onBegin()
             }
         }
-        .padding(.horizontal, AfterimageSpacing.large + AfterimageSpacing.small)
-        .padding(.vertical, AfterimageSpacing.extraLarge)
+        .padding(.horizontal, NineSpacing.large + NineSpacing.small)
+        .padding(.vertical, NineSpacing.extraLarge)
         .background(
             LinearGradient(
                 colors: [

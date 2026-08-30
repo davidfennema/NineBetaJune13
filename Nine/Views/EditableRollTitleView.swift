@@ -8,9 +8,9 @@ struct EditableRollTitleView: View {
         var font: Font {
             switch self {
             case .reveal:
-                AfterimageType.rollTitle
+                NineType.rollTitle
             case .archive:
-                AfterimageType.archiveTitle
+                NineType.archiveTitle
             }
         }
 
@@ -61,7 +61,7 @@ struct EditableRollTitleView: View {
 
     private func beginEditing() {
         draft = title
-        withAnimation(AfterimageMotion.quick) {
+        withAnimation(NineMotion.quick) {
             isEditing = true
         }
         isFocused = true
@@ -69,7 +69,7 @@ struct EditableRollTitleView: View {
 
     private func commit() {
         let trimmedTitle = draft.trimmingCharacters(in: .whitespacesAndNewlines)
-        withAnimation(AfterimageMotion.quick) {
+        withAnimation(NineMotion.quick) {
             isEditing = false
         }
         guard !trimmedTitle.isEmpty, trimmedTitle != title else { return }
