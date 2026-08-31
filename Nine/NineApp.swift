@@ -3,7 +3,6 @@ import SwiftUI
 @main
 struct NineApp: App {
     @StateObject private var rollViewModel = RollViewModel()
-    @StateObject private var unlockStore = UnlockStore()
 
     init() {
         print("[Nine] App entry loaded")
@@ -11,7 +10,7 @@ struct NineApp: App {
 
     var body: some Scene {
         WindowGroup {
-            RootView(viewModel: rollViewModel, unlockStore: unlockStore)
+            RootView(viewModel: rollViewModel)
                 .preferredColorScheme(.dark)
         }
     }
@@ -19,14 +18,11 @@ struct NineApp: App {
 
 struct RootView: View {
     @ObservedObject var viewModel: RollViewModel
-    @ObservedObject var unlockStore: UnlockStore
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage("nine.hasSeenIntro") private var hasSeenIntro = false
     @State private var launchDestination: LaunchDestination = .resolving
     @State private var routeDirection: RouteDirection = .forward
     @State private var isReturningFromReveal = false
-    @State private var showsUnlockPrompt = false
-    @State private var pendingStartRequest: PendingStartRequest?
     private let routeAnimation = Animation.smooth(duration: 0.21, extraBounce: 0)
 
     var body: some View {
@@ -59,8 +55,7 @@ struct RootView: View {
                             onContinueRoll: showCamera,
                             onStartRoll: startRoll,
                             onOpenSavedRoll: openSavedRoll,
-                            onOpenRoll: openStoredRoll,
-                            onShowUnlockPromptForTesting: showUnlockPromptForTesting
+                            onOpenRoll: openStoredRoll
                         )
                     }
                 case .reveal:
@@ -72,16 +67,9 @@ struct RootView: View {
                             onContinueRoll: showCamera,
                             onStartRoll: startRoll,
                             onOpenSavedRoll: openSavedRoll,
-                            onOpenRoll: openStoredRoll,
-                            onShowUnlockPromptForTesting: showUnlockPromptForTesting
+                            onOpenRoll: openStoredRoll
                         )
                     }
-                }
-
-                if showsUnlockPrompt {
-                    unlockPrompt
-                        .transition(NineMotion.screenTransition)
-                        .zIndex(10)
                 }
             }
         }
@@ -90,7 +78,6 @@ struct RootView: View {
         }
         .task {
             guard case .resolving = launchDestination else { return }
-            await unlockStore.configure()
             await viewModel.loadRolls()
             if let roll = await viewModel.resolveLaunchResumeRoll() {
                 launchDestination = .camera(roll)
@@ -122,8 +109,7 @@ struct RootView: View {
                 onContinueRoll: showCamera,
                 onStartRoll: startRoll,
                 onOpenSavedRoll: openSavedRoll,
-                onOpenRoll: openStoredRoll,
-                onShowUnlockPromptForTesting: showUnlockPromptForTesting
+                onOpenRoll: openStoredRoll
             )
             .offset(x: homeOffset(width: width))
             .allowsHitTesting(isShowingHome)
@@ -143,8 +129,7 @@ struct RootView: View {
                 viewModel: viewModel,
                 onContinueRoll: showCamera,
                 onStartRoll: startRoll,
-                onOpenRoll: openStoredRoll,
-                onShowUnlockPromptForTesting: showUnlockPromptForTesting
+                onOpenRoll: openStoredRoll
             )
             .offset(x: isShowingHome ? 0 : -width)
             .allowsHitTesting(isShowingHome && !isReturningFromReveal)
@@ -169,8 +154,7 @@ struct RootView: View {
                         onContinueRoll: showCamera,
                         onStartRoll: startRoll,
                         onOpenSavedRoll: openSavedRoll,
-                        onOpenRoll: openStoredRoll,
-                        onShowUnlockPromptForTesting: showUnlockPromptForTesting
+                        onOpenRoll: openStoredRoll
                     )
                 }
             case .awaitingSecondPass:
@@ -179,8 +163,7 @@ struct RootView: View {
                     onContinueRoll: showCamera,
                     onStartRoll: startRoll,
                     onOpenSavedRoll: openSavedRoll,
-                    onOpenRoll: openStoredRoll,
-                    onShowUnlockPromptForTesting: showUnlockPromptForTesting
+                    onOpenRoll: openStoredRoll
                 )
             case .developing:
                 DevelopingView()
@@ -193,8 +176,7 @@ struct RootView: View {
                 onContinueRoll: showCamera,
                 onStartRoll: startRoll,
                 onOpenSavedRoll: openSavedRoll,
-                onOpenRoll: openStoredRoll,
-                onShowUnlockPromptForTesting: showUnlockPromptForTesting
+                onOpenRoll: openStoredRoll
             )
         }
     }
@@ -253,22 +235,7 @@ struct RootView: View {
         }
     }
 
-    private func showUnlockPromptForTesting() {
-        pendingStartRequest = nil
-        withAnimation(NineMotion.standard) {
-            showsUnlockPrompt = true
-        }
-    }
-
     private func startRoll(mode: RollMode, discardingCurrentRoll: Bool) async {
-        guard unlockStore.canBeginNewRoll(hasCompletedFreeRoll: viewModel.hasCompletedFreeRoll) else {
-            pendingStartRequest = PendingStartRequest(mode: mode, discardingCurrentRoll: discardingCurrentRoll)
-            withAnimation(NineMotion.standard) {
-                showsUnlockPrompt = true
-            }
-            return
-        }
-
         await beginRoll(mode: mode, discardingCurrentRoll: discardingCurrentRoll)
     }
 
@@ -279,82 +246,6 @@ struct RootView: View {
             await viewModel.startRoll(mode: mode)
         }
         showCamera()
-    }
-
-    private var unlockPrompt: some View {
-        ZStack {
-            Color.black
-                .opacity(NineOpacity.dialogScrim)
-                .ignoresSafeArea()
-                .contentShape(Rectangle())
-
-            NineDialogSurface {
-                VStack(spacing: NineSpacing.large) {
-                    VStack(spacing: NineSpacing.medium) {
-                        Text("Your first roll is complete.")
-                            .font(NineType.rollTitle)
-                            .foregroundStyle(.white.opacity(0.88))
-
-                        Text("Unlock Nine to keep shooting.")
-                            .font(NineType.body)
-                            .multilineTextAlignment(.center)
-                            .foregroundStyle(.white.opacity(0.58))
-                            .lineSpacing(3)
-                    }
-
-                    VStack(spacing: NineSpacing.medium) {
-                        NinePrimaryButton(title: unlockButtonTitle, isDisabled: unlockStore.isLoading) {
-                            Task {
-                                await unlockStore.purchaseUnlock()
-                                await continuePendingStartIfUnlocked()
-                            }
-                        }
-
-                        NineSecondaryButton(title: "Restore Purchase", isDisabled: unlockStore.isLoading) {
-                            Task {
-                                await unlockStore.restorePurchases()
-                                await continuePendingStartIfUnlocked()
-                            }
-                        }
-
-                        NineSecondaryButton(title: "Not Now", isDisabled: unlockStore.isLoading) {
-                            pendingStartRequest = nil
-                            withAnimation(NineMotion.standard) {
-                                showsUnlockPrompt = false
-                            }
-                        }
-                    }
-
-                    if let message = unlockStore.statusMessage {
-                        Text(message)
-                            .font(NineType.body)
-                            .multilineTextAlignment(.center)
-                            .foregroundStyle(.white.opacity(NineOpacity.dimmed))
-                    }
-                }
-            }
-            .padding(.horizontal, NineLayout.horizontalScreenMargin)
-        }
-    }
-
-    private var unlockButtonTitle: String {
-        if unlockStore.isLoading {
-            return "Unlocking..."
-        }
-        let price = unlockStore.unlockProduct?.displayPrice ?? "$7.99"
-        return "Unlock Nine · \(price)"
-    }
-
-    private func continuePendingStartIfUnlocked() async {
-        guard unlockStore.isUnlocked else { return }
-        let request = pendingStartRequest
-        pendingStartRequest = nil
-        withAnimation(NineMotion.standard) {
-            showsUnlockPrompt = false
-        }
-        if let request {
-            await beginRoll(mode: request.mode, discardingCurrentRoll: request.discardingCurrentRoll)
-        }
     }
 
     private var showsCompletedRollScreen: Bool {
@@ -426,9 +317,4 @@ private enum LaunchDestination {
 private enum RouteDirection {
     case forward
     case back
-}
-
-private struct PendingStartRequest {
-    let mode: RollMode
-    let discardingCurrentRoll: Bool
 }

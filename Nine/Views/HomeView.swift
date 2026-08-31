@@ -6,15 +6,11 @@ struct HomeView: View {
     var onStartRoll: ((RollMode, Bool) async -> Void)?
     var onOpenSavedRoll: ((Roll) async -> Void)?
     var onOpenRoll: ((Roll) -> Void)?
-    var onShowUnlockPromptForTesting: (() -> Void)?
     @State private var selectedMode: RollMode = .freeform
     @State private var replacementMode: RollMode = .freeform
     @State private var showsAbout = false
     @State private var showsStartOverConfirmation = false
     @State private var showsReplacementStylePicker = false
-    #if DEBUG
-    @AppStorage("nine.debug.forcePurchaseGate") private var debugForcePurchaseGate = false
-    #endif
 
     var body: some View {
         let _ = print("[Nine] HomeView body rendered · activeRoll exists: \(viewModel.activeRoll != nil) · resumeState exists: \(viewModel.resumeState != nil)")
@@ -56,10 +52,6 @@ struct HomeView: View {
                             .foregroundStyle(.white.opacity(NineOpacity.dimmed))
                             .padding(.horizontal, NineLayout.horizontalScreenMargin)
                     }
-
-                    #if DEBUG
-                    purchaseTestingPanel
-                    #endif
 
                     Spacer(minLength: 60)
                 }
@@ -231,45 +223,6 @@ struct HomeView: View {
             ?? viewModel.resumableRoll?.mode
             ?? viewModel.resumeState?.mode
     }
-
-    #if DEBUG
-    private var purchaseTestingPanel: some View {
-        VStack(alignment: .leading, spacing: NineSpacing.medium) {
-            Text("Purchase Testing")
-                .font(NineType.metadata)
-                .tracking(1.2)
-                .foregroundStyle(.white.opacity(NineOpacity.dimmed))
-
-            VStack(spacing: NineSpacing.medium) {
-                Text("Free roll: \(viewModel.hasCompletedFreeRoll ? "complete" : "not complete")")
-                    .font(NineType.body)
-                    .foregroundStyle(.white.opacity(0.58))
-                    .frame(maxWidth: .infinity, alignment: .leading)
-
-                Toggle("Force locked state", isOn: $debugForcePurchaseGate)
-                    .font(NineType.body)
-                    .tint(.white)
-
-                NineSecondaryButton(title: "Mark Free Roll Complete") {
-                    viewModel.debugMarkFreeRollCompleted()
-                }
-
-                if let onShowUnlockPromptForTesting {
-                    NineSecondaryButton(title: "Show Unlock Prompt") {
-                        onShowUnlockPromptForTesting()
-                    }
-                }
-
-                NineSecondaryButton(title: "Reset Free Roll Flag") {
-                    viewModel.debugClearFreeRollCompletion()
-                }
-            }
-            .padding(14)
-            .nineCardSurface()
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-    #endif
 
     private var savedRollsList: some View {
         VStack(alignment: .leading, spacing: 12) {

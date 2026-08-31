@@ -4,14 +4,12 @@ import UIKit
 @MainActor
 final class RollViewModel: ObservableObject {
     static let savedFirstPassLimit = 3
-    private static let completedFreeRollKey = "nine.hasCompletedFreeRoll"
 
     @Published private(set) var activeRoll: Roll?
     @Published private(set) var storedRolls: [Roll] = []
     @Published private(set) var savedFirstPassRolls: [Roll] = []
     @Published private(set) var resumableRoll: Roll?
     @Published private(set) var resumeState: RollResumeState?
-    @Published private(set) var hasCompletedFreeRoll: Bool
     @Published private(set) var unavailableRollCount = 0
     @Published var statusMessage: String?
     @Published private(set) var savedOverlayMessage: String?
@@ -23,7 +21,6 @@ final class RollViewModel: ObservableObject {
 
     init(store: RollStore = RollStore()) {
         self.store = store
-        hasCompletedFreeRoll = UserDefaults.standard.bool(forKey: Self.completedFreeRollKey)
         resumeState = nil
         print("[Nine] RollViewModel initialized")
     }
@@ -35,9 +32,6 @@ final class RollViewModel: ObservableObject {
             storedRolls = result.rolls
                 .filter { $0.phase == .complete }
                 .map(archiveReady)
-            if !storedRolls.isEmpty {
-                markFreeRollCompleted()
-            }
             savedFirstPassRolls = result.rolls
                 .filter(\.isSavedFirstPassRoll)
                 .filter { $0.phase == .awaitingSecondPass || $0.phase == .secondPass }
@@ -490,7 +484,6 @@ final class RollViewModel: ObservableObject {
             activeRoll = visibleRoll
             resumableRoll = nil
             resumeState = nil
-            markFreeRollCompleted()
             savedFirstPassRolls.removeAll { $0.id == roll.id }
             storedRolls.removeAll { $0.id == roll.id }
             storedRolls.insert(visibleRoll, at: 0)
@@ -535,25 +528,6 @@ final class RollViewModel: ObservableObject {
         savedFirstPassRolls.removeAll { $0.id == roll.id }
         savedFirstPassRolls.insert(roll, at: 0)
     }
-
-    private func markFreeRollCompleted() {
-        guard !hasCompletedFreeRoll else { return }
-        hasCompletedFreeRoll = true
-        UserDefaults.standard.set(true, forKey: Self.completedFreeRollKey)
-    }
-
-    #if DEBUG
-    func debugMarkFreeRollCompleted() {
-        markFreeRollCompleted()
-        statusMessage = "Free roll marked complete for purchase testing."
-    }
-
-    func debugClearFreeRollCompletion() {
-        hasCompletedFreeRoll = false
-        UserDefaults.standard.removeObject(forKey: Self.completedFreeRollKey)
-        statusMessage = "Free roll completion reset for purchase testing."
-    }
-    #endif
 
     private func archiveReady(_ roll: Roll) -> Roll {
         var displayRoll = squareNormalized(roll)
