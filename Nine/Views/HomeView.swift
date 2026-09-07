@@ -212,6 +212,8 @@ struct HomeView: View {
                         )
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel(mode.title)
+                    .accessibilityHint(selectedMode.wrappedValue == mode ? "Selected roll style" : "Select roll style")
                 }
             }
         }

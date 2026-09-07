@@ -46,14 +46,27 @@ enum ResumeRollCache {
 actor RollStore {
     private let fileManager: FileManager
     private let directoryURL: URL
+    private let legacyDirectoryURL: URL?
+    private let shouldUpdateResumeCache: Bool
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
+    private var didMigrateLegacyStorage = false
 
-    init(fileManager: FileManager = .default) {
+    init(fileManager: FileManager = .default, directoryURL: URL? = nil, shouldUpdateResumeCache: Bool = true) {
         self.fileManager = fileManager
-        let documents = fileManager.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        directoryURL = documents.appendingPathComponent("Rolls", isDirectory: true)
-        print("[Nine] RollStore initialized · \(directoryURL.path)")
+        self.shouldUpdateResumeCache = shouldUpdateResumeCache
+        if let directoryURL {
+            self.directoryURL = directoryURL
+            legacyDirectoryURL = nil
+        } else {
+            let applicationSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            self.directoryURL = applicationSupport
+                .appendingPathComponent("Nine", isDirectory: true)
+                .appendingPathComponent("Rolls", isDirectory: true)
+            let documents = fileManager.urls(for: .documentDirectory, in: .userDomainMask)[0]
+            legacyDirectoryURL = documents.appendingPathComponent("Rolls", isDirectory: true)
+        }
+        print("[Nine] RollStore initialized · \(self.directoryURL.path)")
 
         encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
@@ -64,6 +77,7 @@ actor RollStore {
 
     func loadRolls() throws -> RollLoadResult {
         try createDirectoryIfNeeded()
+        try migrateLegacyStorageIfNeeded()
 
         let entries = try fileManager.contentsOfDirectory(
             at: directoryURL,
@@ -122,11 +136,17 @@ actor RollStore {
 
     func save(_ roll: Roll) throws {
         try createDirectoryIfNeeded()
+        try migrateLegacyStorageIfNeeded()
         let rollDirectory = directoryURL.appendingPathComponent(roll.id.uuidString, isDirectory: true)
         try createRollDirectories(in: rollDirectory)
 
-        let first = try persistCapturedFrames(roll.firstPassImages, folder: "first", in: rollDirectory)
-        let second = try persistCapturedFrames(roll.secondPassImages, folder: "second", in: rollDirectory)
+        let storesCapturedSources = roll.phase != .complete
+        let first = storesCapturedSources
+            ? try persistCapturedFrames(roll.firstPassImages, folder: "first", in: rollDirectory)
+            : []
+        let second = storesCapturedSources
+            ? try persistCapturedFrames(roll.secondPassImages, folder: "second", in: rollDirectory)
+            : []
         let blendedPaths = try persistDevelopedFrames(roll.blendedImages, in: rollDirectory)
         let gridPath = try persistGridImage(roll.gridImage, in: rollDirectory)
         let manifest = RollManifest(
@@ -145,6 +165,10 @@ actor RollStore {
         )
         let data = try encoder.encode(manifest)
         try data.write(to: manifestURL(in: rollDirectory), options: .atomic)
+        if roll.phase == .complete {
+            try removeCapturedFrameDirectories(in: rollDirectory)
+        }
+        guard shouldUpdateResumeCache else { return }
         if roll.isSavedFirstPassRoll {
             ResumeRollCache.clear()
         } else {
@@ -154,6 +178,7 @@ actor RollStore {
 
     func loadRoll(id: UUID) throws -> Roll? {
         try createDirectoryIfNeeded()
+        try migrateLegacyStorageIfNeeded()
         let rollDirectory = directoryURL.appendingPathComponent(id.uuidString, isDirectory: true)
         if fileManager.fileExists(atPath: manifestURL(in: rollDirectory).path) {
             return try restoreRoll(from: rollDirectory).roll
@@ -170,6 +195,7 @@ actor RollStore {
     }
 
     func discardRoll(id: UUID) throws {
+        try migrateLegacyStorageIfNeeded()
         let rollDirectory = directoryURL.appendingPathComponent(id.uuidString, isDirectory: true)
         if fileManager.fileExists(atPath: rollDirectory.path) {
             try fileManager.removeItem(at: rollDirectory)
@@ -354,6 +380,49 @@ actor RollStore {
                 withIntermediateDirectories: true
             )
         }
+    }
+
+    private func removeCapturedFrameDirectories(in rollDirectory: URL) throws {
+        for folder in ["first", "second"] {
+            let url = rollDirectory.appendingPathComponent(folder, isDirectory: true)
+            if fileManager.fileExists(atPath: url.path) {
+                try fileManager.removeItem(at: url)
+            }
+            try fileManager.createDirectory(at: url, withIntermediateDirectories: true)
+        }
+    }
+
+    private func migrateLegacyStorageIfNeeded() throws {
+        guard !didMigrateLegacyStorage else { return }
+        guard let legacyDirectoryURL,
+              legacyDirectoryURL.standardizedFileURL != directoryURL.standardizedFileURL,
+              fileManager.fileExists(atPath: legacyDirectoryURL.path) else {
+            didMigrateLegacyStorage = true
+            return
+        }
+
+        try createDirectoryIfNeeded()
+        let entries = try fileManager.contentsOfDirectory(
+            at: legacyDirectoryURL,
+            includingPropertiesForKeys: [.isDirectoryKey],
+            options: [.skipsHiddenFiles]
+        )
+
+        for entry in entries where isMigratableLegacyRollEntry(entry) {
+            let destination = directoryURL.appendingPathComponent(entry.lastPathComponent, isDirectory: entry.hasDirectoryPath)
+            guard !fileManager.fileExists(atPath: destination.path) else { continue }
+            try fileManager.copyItem(at: entry, to: destination)
+            try fileManager.removeItem(at: entry)
+        }
+        didMigrateLegacyStorage = true
+    }
+
+    private func isMigratableLegacyRollEntry(_ entry: URL) -> Bool {
+        if entry.pathExtension == "json" { return true }
+        guard (try? entry.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true else {
+            return false
+        }
+        return fileManager.fileExists(atPath: manifestURL(in: entry).path)
     }
 
     private func manifestURL(in rollDirectory: URL) -> URL {

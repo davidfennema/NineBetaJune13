@@ -373,6 +373,8 @@ struct CameraView: View {
         }
         .disabled(!camera.isReady || isCapturing || showsTransition)
         .buttonStyle(NinePressButtonStyle())
+        .accessibilityLabel("Expose frame \(displayedFrameNumber) of \(Roll.frameCount)")
+        .accessibilityHint(phaseCaption.capitalized)
     }
 
     private var permissionNotice: some View {
