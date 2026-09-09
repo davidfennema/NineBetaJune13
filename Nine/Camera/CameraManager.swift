@@ -81,6 +81,7 @@ final class CameraManager: NSObject, ObservableObject {
             sessionQueue.async { [weak self] in
                 guard let self, !self.session.isRunning else { return }
                 self.session.startRunning()
+                self.preparePhotoCaptureResources()
             }
             isReady = true
         } catch {
@@ -98,13 +99,11 @@ final class CameraManager: NSObject, ObservableObject {
     }
 
     func capturePhoto() async throws -> UIImage {
-        guard isReady, continuation == nil else { throw CameraError.notReady }
+        guard isReady, !isSwitchingCamera, continuation == nil else { throw CameraError.notReady }
 
         return try await withCheckedThrowingContinuation { continuation in
             self.continuation = continuation
-            let settings = AVCapturePhotoSettings()
-            settings.photoQualityPrioritization = .speed
-            settings.flashMode = .off
+            let settings = makePhotoSettings()
             configureConnections(for: cameraPosition)
             output.capturePhoto(with: settings, delegate: self)
         }
@@ -122,14 +121,16 @@ final class CameraManager: NSObject, ObservableObject {
         isReady = false
         isSwitchingCamera = true
         cancelHoldFocusLock()
-        sessionQueue.async { [weak self] in
+        sessionQueue.asyncAfter(deadline: .now() + .milliseconds(80)) { [weak self] in
             guard let self else { return }
             do {
                 try self.configureInput(position: nextPosition)
+                self.preparePhotoCaptureResources()
                 Task { @MainActor in
                     self.cameraPosition = nextPosition
                     self.previewCameraPosition = nextPosition
                     self.resetPublishedCameraControls()
+                    try? await Task.sleep(for: .milliseconds(260))
                     self.isReady = true
                     self.isSwitchingCamera = false
                     print("[Nine] Camera switched · current: \(nextPosition.rawValue)")
@@ -137,6 +138,7 @@ final class CameraManager: NSObject, ObservableObject {
             } catch {
                 Task { @MainActor in
                     self.previewCameraPosition = self.cameraPosition
+                    try? await Task.sleep(for: .milliseconds(160))
                     self.isReady = true
                     self.isSwitchingCamera = false
                     print("[Nine] Camera switch failed · \(error.localizedDescription)")
@@ -400,6 +402,17 @@ final class CameraManager: NSObject, ObservableObject {
         if let connection = output.connection(with: .video) {
             NineCameraConnectionConfiguration.apply(to: connection, position: position)
         }
+    }
+
+    private nonisolated func makePhotoSettings() -> AVCapturePhotoSettings {
+        let settings = AVCapturePhotoSettings()
+        settings.photoQualityPrioritization = .speed
+        settings.flashMode = .off
+        return settings
+    }
+
+    private nonisolated func preparePhotoCaptureResources() {
+        output.setPreparedPhotoSettingsArray([makePhotoSettings()], completionHandler: nil)
     }
 
     private nonisolated func configureAutomaticCloseFocusIfSupported(on camera: AVCaptureDevice) {

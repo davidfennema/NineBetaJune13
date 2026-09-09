@@ -188,6 +188,11 @@ struct CameraView: View {
                     .transition(.opacity)
             }
 
+            if camera.isSwitchingCamera {
+                Color.black
+                    .transition(.opacity)
+            }
+
             if let focusPoint {
                 FocusReticle(isLocked: camera.isHoldFocusLocked)
                     .position(focusPoint)
@@ -371,7 +376,7 @@ struct CameraView: View {
             }
             .animation(NineMotion.quick, value: isCapturing)
         }
-        .disabled(!camera.isReady || isCapturing || showsTransition)
+        .disabled(!camera.isReady || isCapturing || showsTransition || camera.isSwitchingCamera)
         .buttonStyle(NinePressButtonStyle())
         .accessibilityLabel("Expose frame \(displayedFrameNumber) of \(Roll.frameCount)")
         .accessibilityHint(phaseCaption.capitalized)
@@ -393,10 +398,12 @@ struct CameraView: View {
     private var transitionOverlay: some View {
         ZStack {
             Color.black.ignoresSafeArea()
-            Text(transitionText)
-                .font(NineType.rollTitle)
-                .foregroundStyle(.white.opacity(0.92))
-                .transition(NineMotion.subtleTransition)
+            if !transitionText.isEmpty {
+                Text(transitionText)
+                    .font(NineType.rollTitle)
+                    .foregroundStyle(.white.opacity(0.92))
+                    .transition(NineMotion.subtleTransition)
+            }
         }
         .transition(NineMotion.screenTransition)
     }
@@ -516,10 +523,18 @@ struct CameraView: View {
 
     private func exposeFrame() {
         guard !isCapturing else { return }
-        guard viewModel.activeRoll?.requiresCaptureInput == true else { return }
+        guard let roll, roll.requiresCaptureInput else { return }
+        let isCompletingSecondPass = roll.phase == .secondPass
+            && roll.secondPassImages.count == Roll.frameCount - 1
         isCapturing = true
         triggerShutterFeedback()
         blinkShutter()
+        if isCompletingSecondPass {
+            withAnimation(NineMotion.quick) {
+                showsTransition = true
+                transitionText = ""
+            }
+        }
         Task {
             do {
                 let image = try await camera.capturePhoto()
@@ -533,10 +548,15 @@ struct CameraView: View {
                     withAnimation(NineMotion.standard) {
                         showsFirstPassDecision = true
                     }
+                } else if milestone == .secondPassComplete {
+                    showsBlackout = true
+                    showsTransition = true
+                    transitionText = ""
                 }
             } catch {
                 camera.resetFocusLockAfterCapture()
                 showsBlackout = false
+                showsTransition = false
                 viewModel.statusMessage = error.localizedDescription
             }
             isCapturing = false
@@ -574,6 +594,7 @@ struct CameraView: View {
                     }
 
                     NinePrimaryButton(title: "Begin Second Pass") {
+                        triggerPassTransitionFeedback()
                         withAnimation(NineMotion.standard) {
                             showsFirstPassDecision = false
                         }
@@ -597,6 +618,12 @@ struct CameraView: View {
         let feedback = UIImpactFeedbackGenerator(style: .light)
         feedback.prepare()
         feedback.impactOccurred(intensity: 0.58)
+    }
+
+    private func triggerPassTransitionFeedback() {
+        let feedback = UIImpactFeedbackGenerator(style: .medium)
+        feedback.prepare()
+        feedback.impactOccurred(intensity: 0.64)
     }
 
     private func triggerExposureTickIfNeeded(for bias: Float) {
@@ -625,13 +652,13 @@ struct CameraView: View {
             showsTransition = true
             transitionText = "First exposure complete."
         }
-        try? await Task.sleep(for: .seconds(1.35))
+        try? await Task.sleep(for: .milliseconds(520))
         withAnimation(NineMotion.reveal) {
             transitionText = "Begin second pass."
         }
-        try? await Task.sleep(for: .seconds(1.25))
+        try? await Task.sleep(for: .milliseconds(360))
         showsBlackout = false
-        withAnimation(NineMotion.longReveal) { showsTransition = false }
+        withAnimation(NineMotion.reveal) { showsTransition = false }
     }
 
     private func normalizedCameraPoint(from point: CGPoint, side: CGFloat) -> CGPoint {

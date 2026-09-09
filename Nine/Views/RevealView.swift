@@ -8,6 +8,7 @@ struct RevealView: View {
     @State private var pageIndex = 0
     @State private var shareItem: SharePreviewItem?
     @State private var isPreparingShare = false
+    @State private var hasContactSheetLanded = false
 
     private var images: [UIImage] {
         viewModel.activeRoll?.blendedImages ?? []
@@ -80,12 +81,17 @@ struct RevealView: View {
         .task(id: viewModel.activeRoll?.id) {
             pageIndex = 0
             visibleFrameCount = 0
+            hasContactSheetLanded = false
             guard !images.isEmpty else { return }
             for index in 1...images.count {
                 try? await Task.sleep(for: .milliseconds(index == 1 ? 150 : 78))
                 withAnimation(NineMotion.reveal) {
                     visibleFrameCount = index
                 }
+            }
+            triggerRevealLandingFeedback()
+            withAnimation(NineMotion.standard) {
+                hasContactSheetLanded = true
             }
         }
     }
@@ -154,6 +160,7 @@ struct RevealView: View {
         }
         .background(.black)
         .padding(NineLayout.contactSheetGridSpacing)
+        .scaleEffect(hasContactSheetLanded ? 1 : 0.992)
         .overlay {
             Rectangle().stroke(.white.opacity(0.08), lineWidth: 1)
         }
@@ -322,6 +329,12 @@ struct RevealView: View {
             }
             shareItem = SharePreviewItem(image: image, title: roll.title, kind: kind)
         }
+    }
+
+    private func triggerRevealLandingFeedback() {
+        let feedback = UIImpactFeedbackGenerator(style: .light)
+        feedback.prepare()
+        feedback.impactOccurred(intensity: 0.42)
     }
 }
 
