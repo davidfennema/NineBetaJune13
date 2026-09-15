@@ -11,35 +11,35 @@ enum ResumeRollCache {
     private static let key = "nine.resumeRollState"
     private static let legacyKey = "afterimage.resumeRollState"
 
-    static func load() -> ResumeRollState? {
-        migrateLegacyStateIfNeeded()
-        guard let data = UserDefaults.standard.data(forKey: key) else { return nil }
+    static func load(defaults: UserDefaults = .standard) -> ResumeRollState? {
+        migrateLegacyStateIfNeeded(defaults: defaults)
+        guard let data = defaults.data(forKey: key) else { return nil }
         return try? JSONDecoder.nine.decode(ResumeRollState.self, from: data)
     }
 
-    static func save(_ state: ResumeRollState?) {
+    static func save(_ state: ResumeRollState?, defaults: UserDefaults = .standard) {
         if let state,
            let data = try? JSONEncoder.nine.encode(state) {
-            UserDefaults.standard.set(data, forKey: key)
-            UserDefaults.standard.removeObject(forKey: legacyKey)
+            defaults.set(data, forKey: key)
+            defaults.removeObject(forKey: legacyKey)
         } else {
-            UserDefaults.standard.removeObject(forKey: key)
-            UserDefaults.standard.removeObject(forKey: legacyKey)
+            defaults.removeObject(forKey: key)
+            defaults.removeObject(forKey: legacyKey)
         }
     }
 
-    static func clear() {
-        save(nil)
+    static func clear(defaults: UserDefaults = .standard) {
+        save(nil, defaults: defaults)
     }
 
-    private static func migrateLegacyStateIfNeeded() {
-        guard UserDefaults.standard.data(forKey: key) == nil,
-              let legacyData = UserDefaults.standard.data(forKey: legacyKey) else {
+    private static func migrateLegacyStateIfNeeded(defaults: UserDefaults) {
+        guard defaults.data(forKey: key) == nil,
+              let legacyData = defaults.data(forKey: legacyKey) else {
             return
         }
 
-        UserDefaults.standard.set(legacyData, forKey: key)
-        UserDefaults.standard.removeObject(forKey: legacyKey)
+        defaults.set(legacyData, forKey: key)
+        defaults.removeObject(forKey: legacyKey)
     }
 }
 
@@ -48,13 +48,16 @@ actor RollStore {
     private let directoryURL: URL
     private let legacyDirectoryURL: URL?
     private let shouldUpdateResumeCache: Bool
+    private let resumeDefaults: UserDefaults
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
     private var didMigrateLegacyStorage = false
 
-    init(fileManager: FileManager = .default, directoryURL: URL? = nil, shouldUpdateResumeCache: Bool = true) {
+    init(fileManager: FileManager = .default, directoryURL: URL? = nil, shouldUpdateResumeCache: Bool = true,
+         resumeDefaults: UserDefaults = .standard) {
         self.fileManager = fileManager
         self.shouldUpdateResumeCache = shouldUpdateResumeCache
+        self.resumeDefaults = resumeDefaults
         if let directoryURL {
             self.directoryURL = directoryURL
             legacyDirectoryURL = nil
@@ -95,12 +98,12 @@ actor RollStore {
                   fileManager.fileExists(atPath: manifestURL(in: entry).path) else { continue }
             do {
                 let restoration = try restoreRoll(from: entry)
-                rolls.append(restoration.roll)
-                restoredIDs.insert(restoration.roll.id)
                 if restoration.wasRepaired {
                     repairedCount += 1
                     try save(restoration.roll)
                 }
+                rolls.append(restoration.roll)
+                restoredIDs.insert(restoration.roll.id)
             } catch {
                 unavailableCount += 1
             }
@@ -135,6 +138,11 @@ actor RollStore {
     }
 
     func save(_ roll: Roll) throws {
+        // Never remove source exposures for an incomplete completed result,
+        // including a damaged legacy archive being migrated.
+        guard roll.phase != .complete || roll.blendedImages.count == Roll.frameCount else {
+            throw RollError.storedRollDamaged
+        }
         try createDirectoryIfNeeded()
         try migrateLegacyStorageIfNeeded()
         let rollDirectory = directoryURL.appendingPathComponent(roll.id.uuidString, isDirectory: true)
@@ -169,11 +177,19 @@ actor RollStore {
             try removeCapturedFrameDirectories(in: rollDirectory)
         }
         guard shouldUpdateResumeCache else { return }
-        if roll.isSavedFirstPassRoll {
-            ResumeRollCache.clear()
-        } else {
-            ResumeRollCache.save(ResumeRollState(roll: roll))
+        if let state = ResumeRollState(roll: roll) {
+            ResumeRollCache.save(state, defaults: resumeDefaults)
+        } else if ResumeRollCache.load(defaults: resumeDefaults)?.rollID == roll.id {
+            ResumeRollCache.clear(defaults: resumeDefaults)
         }
+    }
+
+    func resumeToken() -> ResumeRollState? {
+        shouldUpdateResumeCache ? ResumeRollCache.load(defaults: resumeDefaults) : nil
+    }
+
+    func clearResumeToken() {
+        if shouldUpdateResumeCache { ResumeRollCache.clear(defaults: resumeDefaults) }
     }
 
     func loadRoll(id: UUID) throws -> Roll? {
@@ -205,23 +221,29 @@ actor RollStore {
         if fileManager.fileExists(atPath: legacyURL.path) {
             try fileManager.removeItem(at: legacyURL)
         }
-        if ResumeRollCache.load()?.rollID == id {
-            ResumeRollCache.clear()
+        if shouldUpdateResumeCache, ResumeRollCache.load(defaults: resumeDefaults)?.rollID == id {
+            ResumeRollCache.clear(defaults: resumeDefaults)
         }
     }
 
     private func restoreRoll(from rollDirectory: URL) throws -> (roll: Roll, wasRepaired: Bool) {
         let data = try Data(contentsOf: manifestURL(in: rollDirectory))
         let manifest = try decoder.decode(RollManifest.self, from: data)
-        let first = restoreCapturedFrames(
+        let blended = restoreDevelopedFrames(in: rollDirectory)
+        // Completed archives no longer have source exposures. A missing output
+        // is damage, not evidence that this is a new first pass. Do not move or
+        // rewrite any of the remaining files in this case.
+        guard manifest.phase != .complete || blended.count == Roll.frameCount else {
+            throw RollError.storedRollDamaged
+        }
+        let first = try restoreCapturedFrames(
             from: "first",
             references: manifest.firstPassFrames,
             in: rollDirectory
         )
         let second = first.count == Roll.frameCount
-            ? restoreCapturedFrames(from: "second", references: manifest.secondPassFrames, in: rollDirectory)
+            ? try restoreCapturedFrames(from: "second", references: manifest.secondPassFrames, in: rollDirectory)
             : []
-        let blended = restoreDevelopedFrames(in: rollDirectory)
         let movedOrphanedFirst = try quarantineFiles(after: first.count, in: "first", under: rollDirectory)
         let movedOrphanedSecond = try quarantineFiles(after: second.count, in: "second", under: rollDirectory)
         let movedOrphanedBlended = try quarantineFiles(after: blended.count, in: "blended", under: rollDirectory)
@@ -314,14 +336,20 @@ actor RollStore {
         from folder: String,
         references: [RollManifest.FrameReference],
         in rollDirectory: URL
-    ) -> [CapturedFrame] {
-        let referencesByPath = Dictionary(uniqueKeysWithValues: references.map { ($0.relativePath, $0) })
+    ) throws -> [CapturedFrame] {
+        var referencesByPath: [String: RollManifest.FrameReference] = [:]
+        for reference in references {
+            guard referencesByPath.updateValue(reference, forKey: reference.relativePath) == nil else {
+                throw RollError.storedRollDamaged
+            }
+        }
         var frames: [CapturedFrame] = []
         for index in 0..<Roll.frameCount {
             let relativePath = "\(folder)/\(filename(for: index))"
             let url = rollDirectory.appendingPathComponent(relativePath)
             guard fileManager.fileExists(atPath: url.path),
-                  let data = try? Data(contentsOf: url) else { break }
+                  let data = try? Data(contentsOf: url),
+                  UIImage(data: data) != nil else { break }
             let reference = referencesByPath[relativePath]
             frames.append(CapturedFrame(
                 id: reference?.id ?? UUID(),

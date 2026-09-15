@@ -103,14 +103,7 @@ func isValidResumeRoll(_ roll: Roll?, resume: ResumeRollState?) -> Bool {
     guard !roll.isSavedFirstPassRoll else { return false }
     guard roll.blendedImages.isEmpty, roll.gridImage == nil else { return false }
 
-    switch roll.phase {
-    case .firstPass:
-        return roll.firstPassImages.count < Roll.frameCount
-    case .secondPass:
-        return roll.secondPassImages.count < Roll.frameCount
-    case .awaitingSecondPass, .developing, .complete:
-        return false
-    }
+    return roll.canResumeWork
 }
 
 struct CapturedFrame: Identifiable, Codable {
@@ -204,6 +197,26 @@ struct Roll: Identifiable, Codable {
 
     var requiresCaptureInput: Bool {
         shouldResumeToCamera(self)
+    }
+
+    // Recovery includes the pauses between capture phases, without allowing a
+    // shutter press in either pause. Capture eligibility stays unchanged.
+    var canResumeWork: Bool {
+        guard blendedImages.isEmpty, gridImage == nil else { return false }
+        switch phase {
+        case .firstPass, .secondPass:
+            return requiresCaptureInput
+        case .awaitingSecondPass:
+            return firstPassImages.count == Self.frameCount && secondPassImages.isEmpty
+        case .developing:
+            return firstPassImages.count == Self.frameCount && secondPassImages.count == Self.frameCount
+        case .complete:
+            return false
+        }
+    }
+
+    var canPresentCamera: Bool {
+        requiresCaptureInput || (phase == .awaitingSecondPass && canResumeWork)
     }
 
     var correspondingFirstExposure: UIImage? {
@@ -442,7 +455,7 @@ struct ResumeRollState: Codable, Equatable {
     }
 
     init?(roll: Roll) {
-        guard shouldResumeToCamera(roll), !roll.isSavedFirstPassRoll else { return nil }
+        guard roll.canResumeWork, !roll.isSavedFirstPassRoll else { return nil }
         self.init(
             rollID: roll.id,
             phase: roll.phase,
@@ -465,6 +478,8 @@ enum RollError: LocalizedError {
     case captureUnavailable
     case developmentIncomplete
     case imageEncodingFailed
+    case persistenceFailed
+    case storedRollDamaged
 
     var errorDescription: String? {
         switch self {
@@ -473,6 +488,8 @@ enum RollError: LocalizedError {
         case .captureUnavailable: return "This roll is no longer accepting exposures."
         case .developmentIncomplete: return "Nine developed frames are required."
         case .imageEncodingFailed: return "The captured image could not be stored."
+        case .persistenceFailed: return "Your latest changes could not be saved. Please try again."
+        case .storedRollDamaged: return "A saved roll could not be restored. Its remaining photographs have been kept."
         }
     }
 }

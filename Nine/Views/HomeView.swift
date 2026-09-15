@@ -11,6 +11,7 @@ struct HomeView: View {
     @State private var showsAbout = false
     @State private var showsStartOverConfirmation = false
     @State private var showsReplacementStylePicker = false
+    @State private var rollPendingDeletion: Roll?
 
     var body: some View {
         let _ = print("[Nine] HomeView body rendered · activeRoll exists: \(viewModel.activeRoll != nil) · resumeState exists: \(viewModel.resumeState != nil)")
@@ -45,7 +46,9 @@ struct HomeView: View {
                         archiveList
                     }
 
-                    if let statusMessage = viewModel.statusMessage {
+                    if viewModel.persistenceError != nil {
+                        RollRecoveryNotice(viewModel: viewModel)
+                    } else if let statusMessage = viewModel.statusMessage {
                         Text(statusMessage)
                             .font(NineType.body)
                             .multilineTextAlignment(.center)
@@ -85,6 +88,38 @@ struct HomeView: View {
                 }
                 .transition(NineMotion.screenTransition)
                 .zIndex(3)
+            }
+        }
+        .overlay {
+            if let roll = rollPendingDeletion {
+                ZStack {
+                    Color.black.opacity(NineOpacity.dialogScrim)
+                        .ignoresSafeArea()
+                        .contentShape(Rectangle())
+                    NineDialogSurface {
+                        VStack(spacing: NineSpacing.large) {
+                            Text(roll.isSavedFirstPassRoll ? "Delete saved roll?" : "Delete completed roll?")
+                                .font(NineType.rollTitle)
+                                .foregroundStyle(.white.opacity(0.88))
+                            Text(roll.isSavedFirstPassRoll
+                                 ? "The exposures in this roll will be deleted."
+                                 : "This roll will be removed from Nine. Photos already saved to your library will remain.")
+                                .font(NineType.body)
+                                .foregroundStyle(.white.opacity(0.58))
+                                .multilineTextAlignment(.center)
+                            NineSecondaryButton(title: "Cancel") {
+                                rollPendingDeletion = nil
+                            }
+                            NinePrimaryButton(title: "Delete Roll") {
+                                rollPendingDeletion = nil
+                                withAnimation(NineMotion.standard) {
+                                    viewModel.deleteStoredRoll(roll)
+                                }
+                            }
+                        }
+                    }
+                    .padding(.horizontal, NineLayout.horizontalScreenMargin)
+                }
             }
         }
         .onAppear {
@@ -249,13 +284,12 @@ struct HomeView: View {
                     .listRowSeparator(.hidden)
                     .listRowBackground(Color.clear)
                     .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                        Button(role: .destructive) {
-                            withAnimation(NineMotion.standard) {
-                                viewModel.deleteSavedFirstPassRoll(roll)
-                            }
+                        Button {
+                            rollPendingDeletion = roll
                         } label: {
                             Label("Delete", systemImage: "trash")
                         }
+                        .tint(.red)
                     }
                 }
             }
@@ -292,13 +326,12 @@ struct HomeView: View {
                     .listRowSeparator(.hidden)
                     .listRowBackground(Color.clear)
                     .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                        Button(role: .destructive) {
-                            withAnimation(NineMotion.standard) {
-                                viewModel.deleteStoredRoll(roll)
-                            }
+                        Button {
+                            rollPendingDeletion = roll
                         } label: {
                             Label("Delete", systemImage: "trash")
                         }
+                        .tint(.red)
                     }
                 }
             }
@@ -343,6 +376,7 @@ private struct SavedFirstPassRollRow: View {
     }
 
     private var savedRollStatus: String {
+        if roll.phase == .developing { return "Ready to develop" }
         guard roll.phase == .secondPass else {
             return "Ready for second pass"
         }

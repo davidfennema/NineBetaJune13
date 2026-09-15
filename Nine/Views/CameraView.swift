@@ -29,6 +29,7 @@ struct CameraView: View {
     init(viewModel: RollViewModel, onReturnHome: (() -> Void)? = nil) {
         self.viewModel = viewModel
         self.onReturnHome = onReturnHome
+        _showsFirstPassDecision = State(initialValue: viewModel.activeRoll?.phase == .awaitingSecondPass)
         _camera = StateObject(
             wrappedValue: CameraManager(
                 initialPosition: Self.initialCameraPosition(for: viewModel.activeRoll)
@@ -141,6 +142,20 @@ struct CameraView: View {
                 if showsTransition {
                     transitionOverlay
                 }
+                if viewModel.persistenceError != nil || viewModel.developmentError != nil {
+                    Color.black.opacity(NineOpacity.dialogScrim)
+                        .ignoresSafeArea()
+                        .contentShape(Rectangle())
+                        .zIndex(20)
+                    RollRecoveryNotice(viewModel: viewModel, onReturnHome: onReturnHome)
+                        .position(x: imageStage.centerX, y: imageStage.centerY)
+                        .zIndex(21)
+                } else if let message = viewModel.statusMessage {
+                    NineFloatingNotification(text: message)
+                        .position(x: imageStage.centerX, y: imageStage.centerY)
+                        .onTapGesture { viewModel.statusMessage = nil }
+                        .zIndex(21)
+                }
             }
         }
         .task {
@@ -154,6 +169,9 @@ struct CameraView: View {
             } else {
                 camera.stop()
             }
+        }
+        .onChange(of: viewModel.activeRoll?.id) { _, _ in
+            showsFirstPassDecision = viewModel.activeRoll?.phase == .awaitingSecondPass
         }
         .onDisappear { camera.stop() }
     }
@@ -540,7 +558,8 @@ struct CameraView: View {
                 let image = try await camera.capturePhoto()
                 let milestone = try await viewModel.recordCapture(
                     image,
-                    metadata: ["cameraPosition": camera.cameraPosition.rawValue]
+                    metadata: ["cameraPosition": camera.cameraPosition.rawValue],
+                    rollID: roll.id
                 )
                 camera.resetFocusLockAfterCapture()
 
@@ -604,6 +623,7 @@ struct CameraView: View {
                         }
                     }
                 }
+                .disabled(viewModel.isSavingFirstPass)
             }
         }
     }

@@ -39,6 +39,9 @@
 		B20000000000000000000006 /* RollStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000008 /* RollStore.swift */; };
 		B20000000000000000000007 /* GridRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000007 /* GridRenderer.swift */; };
 		B20000000000000000000008 /* BlendEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000006 /* BlendEngine.swift */; };
+		B20000000000000000000009 /* RollViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000003; };
+		B20000000000000000000010 /* PhotoLibrarySaver.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000009; };
+		B30000000000000000000001 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = A30000000000000000000001; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -82,6 +85,7 @@
 		A20000000000000000000002 /* RollStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RollStoreTests.swift; sourceTree = "<group>"; };
 		A20000000000000000000003 /* ImageProcessingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageProcessingTests.swift; sourceTree = "<group>"; };
 		A20000000000000000000004 /* NineTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = NineTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		A30000000000000000000001 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -131,6 +135,7 @@
 				E10000000000000000000008 /* Views */,
 				A10000000000000000000016 /* Assets.xcassets */,
 				A10000000000000000000014 /* Info.plist */,
+				A30000000000000000000001 /* PrivacyInfo.xcprivacy */,
 			);
 			path = Nine;
 			sourceTree = "<group>";
@@ -283,6 +288,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				B10000000000000000000014 /* Assets.xcassets in Resources */,
+				B30000000000000000000001 /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -338,6 +344,8 @@
 				B20000000000000000000006 /* RollStore.swift in Sources */,
 				B20000000000000000000007 /* GridRenderer.swift in Sources */,
 				B20000000000000000000008 /* BlendEngine.swift in Sources */,
+				B20000000000000000000009 /* RollViewModel.swift in Sources */,
+				B20000000000000000000010 /* PhotoLibrarySaver.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

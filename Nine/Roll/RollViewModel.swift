@@ -17,29 +17,63 @@ final class RollViewModel: ObservableObject {
 
     private let store: RollStore
     private let blendEngine = BlendEngine()
-    private var persistenceTask: Task<Void, Never>?
+    @Published private(set) var persistenceError: String?
+    @Published private var developmentErrors: [UUID: String] = [:]
+    @Published private(set) var isRetryingPersistence = false
+    @Published private(set) var isSavingFirstPass = false
 
-    init(store: RollStore = RollStore()) {
+    private var persistenceTask: Task<Bool, Never>?
+    private var persistenceSequence = 0
+    private var pendingSnapshots: [UUID: Roll] = [:]
+    private var pendingSequences: [UUID: Int] = [:]
+    private var failedSaveIDs: Set<UUID> = []
+    private var deletedRollIDs: Set<UUID> = []
+    private var developingRollIDs: Set<UUID> = []
+    private var completedPendingSave: [UUID: Roll] = [:]
+    private var captureIDs: Set<UUID> = []
+    private var stateVersion = 0
+    private var isStartingRoll = false
+    private var isReplacingRoll = false
+    private let photoSaver: ([UIImage]) async throws -> Void
+
+    var developmentError: String? {
+        activeRoll.flatMap { developmentErrors[$0.id] }
+    }
+
+    init(store: RollStore = RollStore(),
+         photoSaver: @escaping ([UIImage]) async throws -> Void = PhotoLibrarySaver.save(images:)) {
         self.store = store
+        self.photoSaver = photoSaver
         resumeState = nil
         print("[Nine] RollViewModel initialized")
     }
 
     func loadRolls(autoResume: Bool = false) async {
         print("[Nine] RollStore load started")
+        await flushPendingPersistence()
+        let version = stateVersion
         do {
             let result = try await store.loadRolls()
+            guard version == stateVersion else { return }
             storedRolls = result.rolls
                 .filter { $0.phase == .complete }
                 .map(archiveReady)
             savedFirstPassRolls = result.rolls
                 .filter(\.isSavedFirstPassRoll)
-                .filter { $0.phase == .awaitingSecondPass || $0.phase == .secondPass }
+                .filter(\.canResumeWork)
                 .sorted { $0.updatedAt > $1.updatedAt }
             resumableRoll = result.rolls
-                .filter { $0.requiresCaptureInput && !$0.isSavedFirstPassRoll }
+                .filter { $0.canResumeWork && !$0.isSavedFirstPassRoll }
                 .sorted { $0.updatedAt > $1.updatedAt }
                 .first
+            for roll in pendingSnapshots.values where !deletedRollIDs.contains(roll.id) {
+                if roll.isSavedFirstPassRoll {
+                    upsertSavedFirstPassRoll(roll)
+                    if resumableRoll?.id == roll.id { resumableRoll = nil }
+                } else if roll.canResumeWork {
+                    resumableRoll = roll
+                }
+            }
             resumeState = resumableRoll.map(RollResumeState.init)
             unavailableRollCount = result.unavailableRollCount
             print("[Nine] RollStore load completed · active roll found: \(resumableRoll != nil) · saved first-pass rolls: \(savedFirstPassRolls.count) · completed rolls: \(storedRolls.count) · unavailable: \(unavailableRollCount)")
@@ -52,15 +86,18 @@ final class RollViewModel: ObservableObject {
                 _ = await resolveLaunchResumeRoll()
             }
         } catch {
+            guard version == stateVersion else { return }
             print("[Nine] RollStore load failed · \(error.localizedDescription)")
-            resumableRoll = nil
-            resumeState = nil
             statusMessage = error.localizedDescription
         }
     }
 
     func startRoll(mode: RollMode) async {
         print("[Nine] start roll requested · mode: \(mode.rawValue)")
+        guard !isStartingRoll, !hasInProgressRoll else { return }
+        isStartingRoll = true
+        defer { isStartingRoll = false }
+        stateVersion += 1
         let createdAt = Date()
         let title = RollTitleGenerator.nextDefaultTitle()
         let roll = Roll(createdAt: createdAt, mode: mode, title: title)
@@ -69,15 +106,15 @@ final class RollViewModel: ObservableObject {
         resumeState = RollResumeState(roll: roll)
         statusMessage = nil
         do {
-            try await store.save(roll)
+            try await persist(roll)
         } catch {
             statusMessage = error.localizedDescription
         }
     }
 
     var hasInProgressRoll: Bool {
-        (activeRoll?.requiresCaptureInput == true && activeRoll?.isSavedFirstPassRoll != true)
-            || resumableRoll?.requiresCaptureInput == true
+        (activeRoll?.canResumeWork == true && activeRoll?.isSavedFirstPassRoll != true)
+            || resumableRoll?.canResumeWork == true
             || resumeState != nil
     }
 
@@ -86,31 +123,23 @@ final class RollViewModel: ObservableObject {
     }
 
     func parkActiveRollForLibrary() {
-        if activeRollIsSavedLibraryRoll {
-            if var activeRoll {
-                activeRoll.touch()
-                upsertSavedFirstPassRoll(activeRoll)
-                enqueuePersistence(for: activeRoll)
-            }
-            activeRoll = nil
-            resumableRoll = nil
-            resumeState = nil
-            statusMessage = nil
-            return
+        stateVersion += 1
+        guard var roll = activeRoll, roll.canResumeWork else { return }
+        roll.touch()
+        if roll.isSavedFirstPassRoll {
+            upsertSavedFirstPassRoll(roll)
+        } else {
+            resumableRoll = roll
+            resumeState = RollResumeState(roll: roll)
         }
-
-        guard let activeRoll, activeRoll.requiresCaptureInput else { return }
-        resumableRoll = activeRoll
-        resumeState = RollResumeState(roll: activeRoll)
-        self.activeRoll = nil
-        statusMessage = nil
-        enqueuePersistence(for: activeRoll)
+        activeRoll = nil
+        enqueuePersistence(for: roll)
     }
 
     func continueRoll() {
         print("[Nine] continue roll requested · hydrated: \(resumableRoll != nil) · cached resume: \(resumeState != nil)")
-        if activeRoll?.requiresCaptureInput == true {
-            statusMessage = nil
+        if let roll = activeRoll, roll.canResumeWork {
+            beginDevelopmentIfNeeded(roll)
             return
         }
         guard let roll = resumableRoll else {
@@ -119,35 +148,36 @@ final class RollViewModel: ObservableObject {
             }
             return
         }
-        guard roll.requiresCaptureInput else {
+        guard roll.canResumeWork else {
             resumableRoll = nil
             resumeState = nil
             return
         }
+        stateVersion += 1
         let continuedRoll = squareNormalized(roll)
         activeRoll = continuedRoll
+        beginDevelopmentIfNeeded(continuedRoll)
         statusMessage = nil
         Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(250))
             guard self.activeRoll?.id == continuedRoll.id else { return }
-            self.resumableRoll = nil
-            self.resumeState = nil
+            if self.resumableRoll?.id == continuedRoll.id { self.resumableRoll = nil }
+            if self.resumeState?.id == continuedRoll.id { self.resumeState = nil }
         }
     }
 
     func beginSecondPassForActiveRoll() async {
-        guard var roll = activeRoll else { return }
+        guard !isSavingFirstPass, var roll = activeRoll else { return }
         do {
             try roll.beginSecondPass()
             activeRoll = roll
             if roll.isSavedFirstPassRoll {
                 upsertSavedFirstPassRoll(roll)
-                resumeState = nil
             } else {
                 resumeState = RollResumeState(roll: roll)
             }
             statusMessage = nil
-            try await store.save(roll)
+            try await persist(roll)
         } catch {
             statusMessage = error.localizedDescription
         }
@@ -155,7 +185,7 @@ final class RollViewModel: ObservableObject {
 
     @discardableResult
     func saveFirstPassForLater() async -> Bool {
-        guard var roll = activeRoll,
+        guard !isSavingFirstPass, var roll = activeRoll,
               roll.phase == .awaitingSecondPass,
               roll.firstPassImages.count == Roll.frameCount else {
             return false
@@ -166,15 +196,21 @@ final class RollViewModel: ObservableObject {
             return false
         }
 
+        isSavingFirstPass = true
+        defer { isSavingFirstPass = false }
         roll.isSavedFirstPassRoll = true
         roll.touch()
+        // Publish the same intention that is queued for disk. A scene save
+        // during this await must not turn the saved roll back into a normal roll.
+        activeRoll = roll
+        upsertSavedFirstPassRoll(roll)
+        if resumableRoll?.id == roll.id { resumableRoll = nil }
+        if resumeState?.id == roll.id { resumeState = nil }
         do {
-            try await store.save(roll)
-            activeRoll = nil
-            resumableRoll = nil
-            resumeState = nil
-            savedFirstPassRolls.removeAll { $0.id == roll.id }
-            savedFirstPassRolls.insert(roll, at: 0)
+            try await persist(roll)
+            if activeRoll?.id == roll.id { activeRoll = nil }
+            if resumableRoll?.id == roll.id { resumableRoll = nil }
+            if resumeState?.id == roll.id { resumeState = nil }
             statusMessage = nil
             return true
         } catch {
@@ -184,27 +220,29 @@ final class RollViewModel: ObservableObject {
     }
 
     func resumeSavedFirstPass(_ roll: Roll) async {
+        stateVersion += 1
+        let version = stateVersion
         do {
-            let hydratedRoll = try await store.loadRoll(id: roll.id) ?? roll
-            guard (hydratedRoll.phase == .awaitingSecondPass || hydratedRoll.phase == .secondPass),
-                  hydratedRoll.isSavedFirstPassRoll,
-                  hydratedRoll.firstPassImages.count == Roll.frameCount,
-                  hydratedRoll.secondPassImages.count < Roll.frameCount else {
-                savedFirstPassRolls.removeAll { $0.id == roll.id }
+            await flushPendingPersistence()
+            let hydratedRoll = try await store.loadRoll(id: roll.id)
+            guard version == stateVersion, !deletedRollIDs.contains(roll.id) else { return }
+            let restored = pendingSnapshots[roll.id] ?? hydratedRoll
+            guard var secondPassRoll = restored,
+                  secondPassRoll.isSavedFirstPassRoll, secondPassRoll.canResumeWork else {
                 statusMessage = "The saved roll could not be restored."
                 return
             }
-
-            var secondPassRoll = hydratedRoll
+            if let current = activeRoll, !current.isSavedFirstPassRoll, current.canResumeWork {
+                resumableRoll = current
+                resumeState = RollResumeState(roll: current)
+            }
             if secondPassRoll.phase == .awaitingSecondPass {
                 try secondPassRoll.beginSecondPass()
             }
             activeRoll = squareNormalized(secondPassRoll)
-            resumableRoll = nil
-            resumeState = nil
             upsertSavedFirstPassRoll(secondPassRoll)
-            try await store.save(secondPassRoll)
-            statusMessage = nil
+            try await persist(secondPassRoll)
+            beginDevelopmentIfNeeded(secondPassRoll)
         } catch {
             statusMessage = error.localizedDescription
         }
@@ -212,188 +250,90 @@ final class RollViewModel: ObservableObject {
 
     @discardableResult
     func resolveLaunchResumeRoll() async -> Roll? {
-        let token = ResumeRollCache.load()
-        print("[Nine] resume token exists: \(token != nil)")
+        let version = stateVersion
+        let token = await store.resumeToken()
+        guard version == stateVersion else { return nil }
+        var candidate = resumableRoll
         if let token {
-            print("[Nine] resume roll id: \(token.rollID.uuidString)")
-        }
-
-        guard let token else {
-            activeRoll = nil
-            resumableRoll = nil
-            resumeState = nil
-            print("[Nine] final launch destination: home")
-            return nil
-        }
-
-        do {
-            let roll = try await store.loadRoll(id: token.rollID)
-            logLaunchResumeValidation(roll: roll, token: token)
-
-            guard isValidResumeRoll(roll, resume: token), let roll else {
-                ResumeRollCache.clear()
-                activeRoll = nil
-                resumableRoll = nil
-                resumeState = nil
-                print("[Nine] final launch destination: home")
-                return nil
+            do {
+                let diskRoll = try await store.loadRoll(id: token.rollID)
+                let loaded = pendingSnapshots[token.rollID] ?? diskRoll
+                guard version == stateVersion else { return nil }
+                if isValidResumeRoll(loaded, resume: token) {
+                    candidate = loaded
+                } else {
+                    await store.clearResumeToken()
+                }
+            } catch {
+                await store.clearResumeToken()
+                statusMessage = error.localizedDescription
             }
-
-            let resumedRoll = squareNormalized(roll)
-            activeRoll = resumedRoll
-            resumableRoll = nil
-            resumeState = RollResumeState(roll: resumedRoll)
-            print("[Nine] final launch destination: camera")
-            return resumedRoll
-        } catch {
-            ResumeRollCache.clear()
-            activeRoll = nil
-            resumableRoll = nil
-            resumeState = nil
-            statusMessage = error.localizedDescription
-            print("[Nine] loaded roll exists: false")
-            print("[Nine] is valid resume: false")
-            print("[Nine] final launch destination: home")
-            return nil
         }
+        guard version == stateVersion,
+              let roll = candidate, roll.canResumeWork, !roll.isSavedFirstPassRoll else { return nil }
+        let resumedRoll = squareNormalized(roll)
+        activeRoll = resumedRoll
+        resumableRoll = nil
+        resumeState = RollResumeState(roll: resumedRoll)
+        beginDevelopmentIfNeeded(resumedRoll)
+        return resumedRoll
     }
 
     func discardResumableAndStart(mode: RollMode) async {
-        do {
-            if let roll = activeRoll, roll.requiresCaptureInput {
-                try await store.discard(roll)
-                activeRoll = nil
-            } else if let roll = resumableRoll {
-                try await store.discard(roll)
-            } else if let id = resumeState?.id {
-                try await store.discardRoll(id: id)
+        guard !isReplacingRoll else { return }
+        isReplacingRoll = true
+        defer { isReplacingRoll = false }
+        let normal = activeRoll.flatMap { !$0.isSavedFirstPassRoll && $0.canResumeWork ? $0 : nil }
+            ?? resumableRoll
+        if let id = normal?.id ?? resumeState?.id {
+            removeRollFromMemory(id: id)
+            guard await enqueueDeletion(id: id).value else {
+                await loadRolls()
+                return
             }
-            resumableRoll = nil
-            resumeState = nil
-            await startRoll(mode: mode)
-        } catch {
-            statusMessage = error.localizedDescription
         }
+        await startRoll(mode: mode)
     }
 
     func open(_ roll: Roll) {
         print("[Nine] open completed roll · \(roll.id.uuidString)")
+        stateVersion += 1
         activeRoll = archiveReady(roll)
         statusMessage = nil
     }
 
     func renameRoll(id: UUID, to title: String) {
         let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedTitle.isEmpty else { return }
-
-        if var roll = activeRoll, roll.id == id {
-            roll.rename(to: trimmedTitle)
-            activeRoll = roll
-            enqueuePersistence(for: roll)
-        }
-
-        if let index = storedRolls.firstIndex(where: { $0.id == id }) {
-            var roll = storedRolls[index]
-            roll.rename(to: trimmedTitle)
-            storedRolls[index] = roll
-            enqueuePersistence(for: roll)
-        }
-
-        if let index = savedFirstPassRolls.firstIndex(where: { $0.id == id }) {
-            var roll = savedFirstPassRolls[index]
-            roll.rename(to: trimmedTitle)
-            savedFirstPassRolls[index] = roll
-            enqueuePersistence(for: roll)
-        }
-
-        if var roll = resumableRoll, roll.id == id {
-            roll.rename(to: trimmedTitle)
-            resumableRoll = roll
-            resumeState = RollResumeState(roll: roll)
-            enqueuePersistence(for: roll)
-        }
+        guard !trimmedTitle.isEmpty, !deletedRollIDs.contains(id), var roll = rollInMemory(id: id) else { return }
+        roll.rename(to: trimmedTitle)
+        updateRollInMemory(roll)
+        enqueuePersistence(for: roll)
     }
 
     func deleteStoredRolls(at offsets: IndexSet) {
-        let rollsToDelete = offsets.compactMap { storedRolls[safe: $0] }
-        guard !rollsToDelete.isEmpty else { return }
-
-        storedRolls.remove(atOffsets: offsets)
-        Task {
-            do {
-                for roll in rollsToDelete {
-                    try await store.discard(roll)
-                }
-            } catch {
-                statusMessage = error.localizedDescription
-                await loadRolls()
-            }
-        }
+        let rolls = offsets.compactMap { storedRolls[safe: $0] }
+        rolls.forEach(deleteStoredRoll)
     }
 
     func deleteStoredRoll(_ roll: Roll) {
-        if activeRoll?.id == roll.id {
-            activeRoll = nil
-        }
-        if resumableRoll?.id == roll.id {
-            resumableRoll = nil
-        }
-        if resumeState?.id == roll.id {
-            resumeState = nil
-        }
-        storedRolls.removeAll { $0.id == roll.id }
-        savedFirstPassRolls.removeAll { $0.id == roll.id }
+        removeRollFromMemory(id: roll.id)
+        let task = enqueueDeletion(id: roll.id)
         Task {
-            do {
-                try await store.discard(roll)
-            } catch {
-                statusMessage = error.localizedDescription
-                await loadRolls()
-            }
+            if !(await task.value) { await loadRolls() }
         }
     }
 
     func deleteSavedFirstPassRoll(_ roll: Roll) {
-        if activeRoll?.id == roll.id {
-            activeRoll = nil
-        }
-        if resumableRoll?.id == roll.id {
-            resumableRoll = nil
-        }
-        if resumeState?.id == roll.id {
-            resumeState = nil
-        }
-        savedFirstPassRolls.removeAll { $0.id == roll.id }
-        Task {
-            do {
-                try await store.discard(roll)
-            } catch {
-                statusMessage = error.localizedDescription
-                await loadRolls()
-            }
-        }
+        deleteStoredRoll(roll)
     }
 
     func returnHome() {
-        if activeRollIsSavedLibraryRoll {
-            if var activeRoll {
-                activeRoll.touch()
-                upsertSavedFirstPassRoll(activeRoll)
-                enqueuePersistence(for: activeRoll)
-            }
+        if activeRoll?.canResumeWork == true {
+            parkActiveRollForLibrary()
+        } else {
+            stateVersion += 1
             activeRoll = nil
-            resumableRoll = nil
-            resumeState = nil
-            statusMessage = nil
-            return
         }
-
-        if let activeRoll, activeRoll.requiresCaptureInput {
-            resumableRoll = activeRoll
-            resumeState = RollResumeState(roll: activeRoll)
-        }
-        activeRoll = nil
-        statusMessage = nil
     }
 
     func clearSavedOverlayMessage(_ message: String) {
@@ -401,27 +341,26 @@ final class RollViewModel: ObservableObject {
         savedOverlayMessage = nil
     }
 
-    func recordCapture(_ image: UIImage, metadata: [String: String]? = nil) async throws -> CaptureMilestone {
-        guard var roll = activeRoll else { throw RollError.captureUnavailable }
-        guard let data = await encodedJPEGData(from: image) else {
-            throw RollError.imageEncodingFailed
+    func recordCapture(_ image: UIImage, metadata: [String: String]? = nil,
+                       rollID: UUID? = nil) async throws -> CaptureMilestone {
+        guard let id = rollID ?? activeRoll?.id, let original = rollInMemory(id: id),
+              original.requiresCaptureInput, !captureIDs.contains(id) else {
+            throw RollError.captureUnavailable
         }
-
+        captureIDs.insert(id)
+        defer { captureIDs.remove(id) }
+        guard let data = await encodedJPEGData(from: image) else { throw RollError.imageEncodingFailed }
+        // Encoding can yield to navigation, renaming, or deletion. Append to the
+        // latest copy of the same roll; never resurrect a deleted/replaced roll.
+        guard !deletedRollIDs.contains(id), var roll = rollInMemory(id: id),
+              roll.phase == original.phase, roll.capturedFrameCount == original.capturedFrameCount else {
+            throw RollError.captureUnavailable
+        }
         let frame = CapturedFrame(imageData: data, metadata: metadata)
         let milestone = try roll.append(frame)
-        activeRoll = roll
-        if roll.isSavedFirstPassRoll, milestone != .secondPassComplete {
-            upsertSavedFirstPassRoll(roll)
-        }
-        resumeState = roll.requiresCaptureInput && !roll.isSavedFirstPassRoll ? RollResumeState(roll: roll) : nil
+        updateRollInMemory(roll)
         enqueuePersistence(for: roll)
-
-        if milestone == .secondPassComplete {
-            Task {
-                await self.flushPendingPersistence()
-                await self.developCurrentRoll()
-            }
-        }
+        if milestone == .secondPassComplete { beginDevelopmentIfNeeded(roll) }
         return milestone
     }
 
@@ -442,21 +381,35 @@ final class RollViewModel: ObservableObject {
     }
 
     func persistActiveRoll() async {
-        guard var roll = activeRoll, roll.phase != .complete else { return }
-        roll.touch()
-        do {
+        // Enqueue immediately, in mutation order. Finishing a save must never
+        // assign its snapshot back to the live roll after an await.
+        if let roll = activeRoll, roll.phase != .complete {
+            _ = await enqueuePersistence(for: roll).value
+        } else {
             await flushPendingPersistence()
-            try await store.save(roll)
-            activeRoll = roll
-            if roll.isSavedFirstPassRoll, roll.phase == .awaitingSecondPass || roll.phase == .secondPass {
-                upsertSavedFirstPassRoll(roll)
-                resumeState = nil
-            } else {
-                resumeState = roll.requiresCaptureInput ? RollResumeState(roll: roll) : nil
-            }
-        } catch {
-            statusMessage = error.localizedDescription
         }
+    }
+
+    func retryPersistence() async {
+        guard !isRetryingPersistence else { return }
+        isRetryingPersistence = true
+        defer { isRetryingPersistence = false }
+        await flushPendingPersistence()
+        let snapshots = pendingSnapshots.values.filter { !deletedRollIDs.contains($0.id) }
+        for roll in snapshots { _ = await enqueuePersistence(for: roll).value }
+        if persistenceError == nil {
+            if statusMessage == RollError.persistenceFailed.localizedDescription { statusMessage = nil }
+            let recoveryIDs = Set(snapshots.map(\.id)).union(completedPendingSave.keys)
+            for id in recoveryIDs {
+                if let roll = rollInMemory(id: id) { beginDevelopmentIfNeeded(roll) }
+            }
+            if let roll = activeRoll { beginDevelopmentIfNeeded(roll) }
+        }
+    }
+
+    func retryDevelopment() {
+        guard let roll = activeRoll else { return }
+        beginDevelopmentIfNeeded(roll)
     }
 
     func handleScenePhase(_ phase: ScenePhase) async {
@@ -472,29 +425,51 @@ final class RollViewModel: ObservableObject {
         }
     }
 
-    private func developCurrentRoll() async {
-        await flushPendingPersistence()
-        guard var roll = activeRoll, roll.phase == .developing else { return }
+    private func beginDevelopmentIfNeeded(_ roll: Roll) {
+        guard roll.phase == .developing, roll.canResumeWork,
+              !deletedRollIDs.contains(roll.id), !developingRollIDs.contains(roll.id) else { return }
+        developingRollIDs.insert(roll.id)
+        developmentErrors.removeValue(forKey: roll.id)
+        Task { await develop(roll) }
+    }
+
+    private func develop(_ source: Roll) async {
+        defer { developingRollIDs.remove(source.id) }
         do {
-            let images = try await blendEngine.develop(roll)
-            let grid = GridRenderer.render(images: images)
-            try roll.finishDevelopment(images: images, gridImage: grid)
-            try await store.save(roll)
+            await flushPendingPersistence()
+            guard !deletedRollIDs.contains(source.id) else { return }
+            guard !failedSaveIDs.contains(source.id) else { throw RollError.persistenceFailed }
+            var roll: Roll
+            if let completed = completedPendingSave[source.id] {
+                roll = completed
+            } else {
+                roll = source
+                let images = try await blendEngine.develop(roll)
+                guard !deletedRollIDs.contains(source.id) else { return }
+                let grid = GridRenderer.render(images: images)
+                try roll.finishDevelopment(images: images, gridImage: grid)
+                if let latest = rollInMemory(id: source.id) { roll.title = latest.title }
+                completedPendingSave[roll.id] = roll
+            }
+            try await persist(roll)
+            guard !deletedRollIDs.contains(roll.id) else { return }
+            roll = completedPendingSave[roll.id] ?? roll
             let visibleRoll = archiveReady(roll)
-            activeRoll = visibleRoll
-            resumableRoll = nil
-            resumeState = nil
+            if activeRoll?.id == roll.id { activeRoll = visibleRoll }
+            if resumableRoll?.id == roll.id { resumableRoll = nil }
+            if resumeState?.id == roll.id { resumeState = nil }
             savedFirstPassRolls.removeAll { $0.id == roll.id }
             storedRolls.removeAll { $0.id == roll.id }
             storedRolls.insert(visibleRoll, at: 0)
-
-            var output = images
-            if let grid {
-                output.append(grid)
-            }
+            completedPendingSave.removeValue(forKey: roll.id)
+            developmentErrors.removeValue(forKey: roll.id)
+            var output = roll.blendedImages
+            if let grid = roll.gridImage { output.append(grid) }
             await saveToPhotos(output, completionText: nil, overlayText: "✓ Saved to Photos")
         } catch {
-            statusMessage = error.localizedDescription
+            if !deletedRollIDs.contains(source.id) {
+                developmentErrors[source.id] = "This roll could not finish developing. Your exposures have been kept."
+            }
         }
     }
 
@@ -502,7 +477,7 @@ final class RollViewModel: ObservableObject {
         isExporting = true
         defer { isExporting = false }
         do {
-            try await PhotoLibrarySaver.save(images: images)
+            try await photoSaver(images)
             statusMessage = completionText
             savedOverlayMessage = overlayText
         } catch {
@@ -524,7 +499,7 @@ final class RollViewModel: ObservableObject {
 
     private func upsertSavedFirstPassRoll(_ roll: Roll) {
         guard roll.isSavedFirstPassRoll,
-              roll.phase == .awaitingSecondPass || roll.phase == .secondPass else { return }
+              roll.canResumeWork else { return }
         savedFirstPassRolls.removeAll { $0.id == roll.id }
         savedFirstPassRolls.insert(roll, at: 0)
     }
@@ -569,9 +544,14 @@ final class RollViewModel: ObservableObject {
 
     private func hydrateAndContinueRoll(id: UUID) async {
         print("[Nine] hydrate active roll started · \(id.uuidString)")
+        let version = stateVersion
         do {
+            await flushPendingPersistence()
             let result = try await store.loadRolls()
-            guard let roll = result.rolls.first(where: { $0.id == id && $0.requiresCaptureInput }) else {
+            guard version == stateVersion, !deletedRollIDs.contains(id) else { return }
+            guard let roll = pendingSnapshots[id] ?? result.rolls.first(where: {
+                $0.id == id && $0.canResumeWork && !$0.isSavedFirstPassRoll
+            }) else {
                 resumeState = nil
                 statusMessage = "The saved roll could not be restored."
                 print("[Nine] hydrate active roll failed · roll not found")
@@ -581,30 +561,122 @@ final class RollViewModel: ObservableObject {
             print("[Nine] hydrate active roll completed · phase: \(roll.phase.rawValue) · frame count: \(roll.capturedFrameCount)")
             continueRoll()
         } catch {
+            guard version == stateVersion else { return }
             print("[Nine] hydrate active roll failed · \(error.localizedDescription)")
             resumeState = nil
             statusMessage = error.localizedDescription
         }
     }
 
-    private func enqueuePersistence(for roll: Roll) {
-        let previousTask = persistenceTask
-        persistenceTask = Task { [weak self] in
-            await previousTask?.value
-            guard let self else { return }
-            do {
-                try await self.store.save(roll)
-            } catch {
-                await MainActor.run {
-                    self.statusMessage = error.localizedDescription
-                }
-            }
+    private func rollInMemory(id: UUID) -> Roll? {
+        if let roll = activeRoll, roll.id == id { return roll }
+        if let roll = resumableRoll, roll.id == id { return roll }
+        return savedFirstPassRolls.first { $0.id == id } ?? storedRolls.first { $0.id == id }
+    }
+
+    private func updateRollInMemory(_ roll: Roll) {
+        if activeRoll?.id == roll.id { activeRoll = roll }
+        if let index = storedRolls.firstIndex(where: { $0.id == roll.id }) { storedRolls[index] = roll }
+        if roll.isSavedFirstPassRoll {
+            upsertSavedFirstPassRoll(roll)
+        } else if roll.canResumeWork {
+            if resumableRoll?.id == roll.id { resumableRoll = roll }
+            resumeState = RollResumeState(roll: roll)
         }
     }
 
-    private func flushPendingPersistence() async {
-        await persistenceTask?.value
-        persistenceTask = nil
+    private func removeRollFromMemory(id: UUID) {
+        stateVersion += 1
+        deletedRollIDs.insert(id)
+        if activeRoll?.id == id { activeRoll = nil }
+        if resumableRoll?.id == id { resumableRoll = nil }
+        if resumeState?.id == id { resumeState = nil }
+        storedRolls.removeAll { $0.id == id }
+        savedFirstPassRolls.removeAll { $0.id == id }
+        pendingSnapshots.removeValue(forKey: id)
+        pendingSequences.removeValue(forKey: id)
+        completedPendingSave.removeValue(forKey: id)
+        developmentErrors.removeValue(forKey: id)
+        failedSaveIDs.remove(id)
+        updatePersistenceError()
+    }
+
+    private func persist(_ roll: Roll) async throws {
+        guard await enqueuePersistence(for: roll).value else { throw RollError.persistenceFailed }
+    }
+
+    @discardableResult
+    private func enqueuePersistence(for snapshot: Roll) -> Task<Bool, Never> {
+        // A scene save during the final disk write must not put a developing
+        // snapshot back on disk after the completed result.
+        var roll = completedPendingSave[snapshot.id] ?? snapshot
+        if completedPendingSave[snapshot.id] != nil, snapshot.updatedAt > roll.updatedAt {
+            roll.title = snapshot.title
+            roll.updatedAt = snapshot.updatedAt
+            completedPendingSave[roll.id] = roll
+        }
+        let previousTask = persistenceTask
+        persistenceSequence += 1
+        stateVersion += 1
+        let sequence = persistenceSequence
+        if !deletedRollIDs.contains(roll.id) {
+            pendingSnapshots[roll.id] = roll
+            pendingSequences[roll.id] = sequence
+        }
+        let task = Task { [self] in
+            _ = await previousTask?.value
+            guard !deletedRollIDs.contains(roll.id) else { return false }
+            do {
+                try await store.save(roll)
+                if pendingSequences[roll.id] == sequence {
+                    pendingSnapshots.removeValue(forKey: roll.id)
+                    pendingSequences.removeValue(forKey: roll.id)
+                }
+                failedSaveIDs.remove(roll.id)
+                updatePersistenceError()
+                return true
+            } catch {
+                if !deletedRollIDs.contains(roll.id) { failedSaveIDs.insert(roll.id) }
+                updatePersistenceError()
+                return false
+            }
+        }
+        persistenceTask = task
+        return task
+    }
+
+    private func enqueueDeletion(id: UUID) -> Task<Bool, Never> {
+        let previousTask = persistenceTask
+        persistenceSequence += 1
+        let task = Task { [self] in
+            _ = await previousTask?.value
+            do {
+                try await store.discardRoll(id: id)
+                return true
+            } catch {
+                deletedRollIDs.remove(id)
+                statusMessage = "The roll could not be deleted. Please try again."
+                return false
+            }
+        }
+        persistenceTask = task
+        return task
+    }
+
+    private func updatePersistenceError() {
+        persistenceError = failedSaveIDs.isEmpty ? nil : RollError.persistenceFailed.localizedDescription
+    }
+
+    func flushPendingPersistence() async {
+        // Include saves enqueued while an earlier save is suspended.
+        while let task = persistenceTask {
+            let sequence = persistenceSequence
+            _ = await task.value
+            if sequence == persistenceSequence {
+                persistenceTask = nil
+                return
+            }
+        }
     }
 
     private nonisolated func encodedJPEGData(from image: UIImage) async -> Data? {

@@ -43,7 +43,7 @@ struct RootView: View {
                         homeCameraContainer(width: geometry.size.width)
                     }
                 case .camera(let roll):
-                    if shouldResumeToCamera(roll) {
+                    if roll.canPresentCamera {
                         homeCameraContainer(width: geometry.size.width)
                     } else if showsCompletedRollScreen {
                         revealHomeContainer(width: geometry.size.width)
@@ -129,6 +129,7 @@ struct RootView: View {
                 viewModel: viewModel,
                 onContinueRoll: showCamera,
                 onStartRoll: startRoll,
+                onOpenSavedRoll: openSavedRoll,
                 onOpenRoll: openStoredRoll
             )
             .offset(x: isShowingHome ? 0 : -width)
@@ -146,7 +147,7 @@ struct RootView: View {
         if let roll = viewModel.activeRoll {
             switch roll.phase {
             case .firstPass, .secondPass:
-                if shouldResumeToCamera(roll) {
+                if roll.canPresentCamera {
                     CameraView(viewModel: viewModel, onReturnHome: showHome)
                 } else {
                     HomeView(
@@ -158,15 +159,9 @@ struct RootView: View {
                     )
                 }
             case .awaitingSecondPass:
-                HomeView(
-                    viewModel: viewModel,
-                    onContinueRoll: showCamera,
-                    onStartRoll: startRoll,
-                    onOpenSavedRoll: openSavedRoll,
-                    onOpenRoll: openStoredRoll
-                )
+                CameraView(viewModel: viewModel, onReturnHome: showHome)
             case .developing:
-                DevelopingView()
+                DevelopingView(viewModel: viewModel, onReturnHome: showHome)
             case .complete:
                 RevealView(viewModel: viewModel, onReturnHome: showHomeFromReveal)
             }
@@ -205,7 +200,7 @@ struct RootView: View {
 
     private func showCamera() {
         viewModel.continueRoll()
-        if let roll = viewModel.activeRoll, shouldResumeToCamera(roll) {
+        if let roll = viewModel.activeRoll, roll.canResumeWork {
             routeDirection = .forward
             withAnimation(routeAnimation) {
                 launchDestination = .camera(roll)
@@ -257,11 +252,11 @@ struct RootView: View {
     }
 
     private var hasCameraRoute: Bool {
-        if let roll = viewModel.activeRoll, shouldResumeToCamera(roll) {
+        if let roll = viewModel.activeRoll, roll.canPresentCamera {
             return true
         }
         if case .camera(let roll) = launchDestination {
-            return shouldResumeToCamera(roll)
+            return roll.canPresentCamera
         }
         return false
     }
